@@ -298,7 +298,7 @@ def sda(fm, basenames, time_step, tif_path, hdt, acode_map=None, nthresh=10, sda
                      'piggyback_acodes':{}}
         return fr_kwargs
     for bn in basenames:
-        #print('SDA for TSA', bn)
+        print('SDA for TSA', bn)
         mask = (bn, '?', '?', '?')
         fr = ForestRaster(**cmp_fr_kwargs(bn))
         fr.allocate_schedule(mask=mask, verbose=1, sda_mode=sda_mode, nthresh=nthresh)
