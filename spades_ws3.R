@@ -1,0 +1,212 @@
+
+# Everything in this file gets sourced during simInit, and all functions and objects
+# are put into the simList. To use objects, use sim$xxx, and are thus globally available
+# to all modules. Functions can be used without sim$ as they are namespaced, like functions
+# in R packages. If exact location is required, functions will be: sim$<moduleName>$FunctionName
+defineModule(sim, list(
+  name = "harvesting",
+  description = NA, #"insert module description here",
+  keywords = NA, # c("insert key words here"),
+  authors = c(person(c("First", "Middle"), "Last", email = "email@example.com", role = c("aut", "cre"))),
+  childModules = character(0),
+  version = list(SpaDES.core = "0.2.5.9000", harvesting = "0.0.1"),
+  spatialExtent = raster::extent(rep(NA_real_, 4)),
+  timeframe = as.POSIXlt(c(NA, NA)),
+  timeunit = "year",
+  citation = list("citation.bib"),
+  documentation = list("README.txt", "harvesting.Rmd"),
+  reqdPkgs = list(),
+  parameters = rbind(
+    #defineParameter("paramName", "paramClass", value, min, max, "parameter description
+    defineParameter("basenames", "character", NA, NA, NA, "MU baseneames to load"),
+    defineParameter("horizon", "numeric", NA, NA, NA, "ws3 simulation horizon (periods)"),
+    defineParameter(".plotInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first plot event should occur"),
+    defineParameter(".plotInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between plot events"),
+    defineParameter(".saveInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first save event should occur"),
+    defineParameter(".saveInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between save events"),
+    defineParameter(".useCache", "logical", FALSE, NA, NA, "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant")
+  ),
+  inputObjects = bind_rows(
+    #expectsInput("objectName", "objectClass", "input object description", sourceURL, ...),
+    expectsInput(objectName = "landscape", objectClass = "RasterStack", desc = "stand age", sourceURL = NA)
+  ),
+  outputObjects = bind_rows(
+    #createsOutput("objectName", "objectClass", "output object description", ...),
+    createsOutput(objectName = NA, objectClass = NA, desc = NA)
+  )
+))
+
+## event types
+#   - type `init` is required for initialization
+
+doEvent.harvesting = function(sim, eventTime, eventType) {
+  switch(
+    eventType,
+    init = {
+      ### check for more detailed object dependencies:
+      ### (use `checkObject` or similar)
+
+      # do stuff for this event
+      sim <- Init(sim)
+
+      # schedule future event(s)
+      sim <- scheduleEvent(sim, 0, "harvesting", "harvest")
+      sim <- scheduleEvent(sim, 0, "harvesting", "grow")
+      sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "harvesting", "plot")
+      sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "harvesting", "save")
+    },
+    plot = {
+      # ! ----- EDIT BELOW ----- ! #
+      # do stuff for this event
+
+      #plotFun(sim) # uncomment this, replace with object to plot
+      # schedule future event(s)
+
+      # e.g.,
+      #sim <- scheduleEvent(sim, time(sim) + P(sim)$.plotInterval, "harvesting", "plot")
+
+      # ! ----- STOP EDITING ----- ! #
+    },
+    save = {
+      # ! ----- EDIT BELOW ----- ! #
+      # do stuff for this event
+
+      # e.g., call your custom functions/methods here
+      # you can define your own methods below this `doEvent` function
+
+      # schedule future event(s)
+
+      # e.g.,
+      sim <- scheduleEvent(sim, time(sim) + P(sim)$.saveInterval, "harvesting", "save")
+
+      # ! ----- STOP EDITING ----- ! #
+    },
+    harvest = {
+      sim <- applyHarvest(sim) 
+      sim <- scheduleEvent(sim, time(sim) + 1, "harvesting", "harvest")
+    },
+    grow = {
+      sim <- applyGrow(sim)
+      sim <- scheduleEvent(sim, time(sim) + 1, "harvesting", "grow")
+    },
+    warning(paste("Undefined event type: '", current(sim)[1, "eventType", with = FALSE],
+                  "' in module '", current(sim)[1, "moduleName", with = FALSE], "'", sep = ""))
+  )
+  return(invisible(sim))
+}
+
+## event functions
+#   - keep event functions short and clean, modularize by calling subroutines from section below.
+
+### template initialization
+Init <- function(sim) {
+  library(R.utils)
+  py$sys$path <- insert(py$sys$path, 1, file.path(modulePath(sim), currentModule(sim), "python"))
+  py$sys$path <- insert(py$sys$path, 1, file.path(modulePath(sim), currentModule(sim), "python", "ws3"))
+  py$basenames <- params(sim)$.globals$basenames
+  py_run_file(file.path(modulePath(sim), currentModule(sim), "python", "spadesws3_params.py"))
+  py$base_year <- params(sim)$.globals$base.year
+  py$horizon <- P(sim, module=currentModule(sim))$horizon
+  sim$fm <- py$bootstrap_forestmodel_kwargs()
+  return(invisible(sim))
+}
+
+### template for save events
+Save <- function(sim) {
+  # ! ----- EDIT BELOW ----- ! #
+  # do stuff for this event
+  sim <- saveFiles(sim)
+
+  # ! ----- STOP EDITING ----- ! #
+  return(invisible(sim))
+}
+
+### template for plot events
+plotFun <- function(sim) {
+  # ! ----- EDIT BELOW ----- ! #
+  # do stuff for this event
+  #Plot(sim$object)
+
+  # ! ----- STOP EDITING ----- ! #
+  return(invisible(sim))
+}
+
+
+updateAges <- function(sim) {
+  #browser()
+  year <- as.integer(time(sim) + params(sim)$.globals$base.year)
+  files <- sapply(P(sim, module = currentModule(sim))$basenames,
+                  function(bn) file.path(inputPath(sim),
+                                         P(sim, module = currentModule(sim))$tifPath,
+                                         bn,
+                                         paste("inventory_", toString(year), ".tif", sep="")))
+  rs.list <- sapply(files, stack) # one stack per MU
+  rs.list <- rapply(rs.list, 
+                    function(rs) {
+                      rs[[2]] <- mask(crop(sim$landscape$age, rs[[2]]), rs[[2]])
+                      rs[[2]][is.nan(rs[[2]])] <- NA
+                      return(rs)})
+  mapply(writeRaster, rs.list, files, format='GTiff', overwrite=TRUE, datatype='INT4S') 
+  return(invisible(sim))
+}
+
+loadAges <- function(sim) {
+  #browser()
+  year <- as.integer(time(sim) + params(sim)$.globals$base.year)
+  files <- sapply(P(sim, module = currentModule(sim))$basenames,
+                  function(bn) file.path(inputPath(sim),
+                                         P(sim, module = currentModule(sim))$tifPath,
+                                         bn,
+                                         paste("inventory_", toString(year), ".tif", sep="")))
+  x <- sapply(files, raster, band=2)
+  names(x) <- NULL
+  x$fun <- mean
+  x$na.rm <- TRUE
+  r <- do.call(mosaic, x)
+  r[is.nan(r)] <- NA # replace NaN values with NA
+  return(r)
+}
+
+applyHarvest <- function(sim) {
+  #browser()
+  year <- as.integer(time(sim) + params(sim)$.globals$base.year)
+  py$base_year <- year
+  sim$fm$base_year <- year
+  #py$schedule_harvest_kwargslist(sim$fm)
+  updateAges(sim)
+  py$simulate_harvest(sim$fm, py$basenames, year) # run aspatial scheduler and allocate to pixels
+  sim$landscape$age <- loadAges(sim)
+  return(invisible(sim))
+}
+
+applyGrow <- function(sim) {
+  sim$landscape$age <- sim$landscape$age + 1 
+  return(invisible(sim))
+}
+
+
+.inputObjects <- function(sim) {
+  # Any code written here will be run during the simInit for the purpose of creating
+  # any objects required by this module and identified in the inputObjects element of defineModule.
+  # This is useful if there is something required before simulation to produce the module
+  # object dependencies, including such things as downloading default datasets, e.g.,
+  # downloadData("LCC2005", modulePath(sim)).
+  # Nothing should be created here that does not create a named object in inputObjects.
+  # Any other initiation procedures should be put in "init" eventType of the doEvent function.
+  # Note: the module developer can check if an object is 'suppliedElsewhere' to
+  # selectively skip unnecessary steps because the user has provided those inputObjects in the
+  # simInit call, or another module will supply or has supplied it. e.g.,
+  # if (!suppliedElsewhere('defaultColor', sim)) {
+  #   sim$map <- Cache(prepInputs, extractURL('map')) # download, extract, load file from url in sourceURL
+  # }
+
+  #cacheTags <- c(currentModule(sim), "function:.inputObjects") ## uncomment this if Cache is being used
+  dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
+  message(currentModule(sim), ": using dataPath '", dPath, "'.")
+
+  # ! ----- EDIT BELOW ----- ! #
+
+  # ! ----- STOP EDITING ----- ! #
+  return(invisible(sim))
+}
+### add additional events as needed by copy/pasting from above
