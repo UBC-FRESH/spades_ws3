@@ -18,10 +18,11 @@ defineModule(sim, list(
   reqdPkgs = list(),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description
-    defineParameter("basenames", "character", NA, NA, NA, 'MU baseneames to load, e.g. "tsa40"'),
+    defineParameter("basenames", "character", NA, NA, NA, 'MU baseneames to load'),
     defineParameter("base.year", 'numeric', 2015, NA, NA, 'base year of forest inventory data'),
-    defineParameter("horizon", "numeric", NA, NA, NA, "ws3 simulation horizon (periods)"),
-    defineParameter("yearOfFirstHarvest", start(sim), NA, NA, "year to schedule first harvest"),
+    defineParameter("horizon", "numeric", 1, NA, NA, "ws3 simulation horizon (periods)"),
+    defineParameter("tifPath", 'character', 'tif', NA, NA, desc = 'name of directory with tifs in inputs'),
+    defineParameter("yearOfFirstHarvest", 'numeric', start(sim), NA, NA, "year to schedule first harvest"),
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first plot event should occur"),
     defineParameter(".plotInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between plot events"),
     defineParameter(".saveInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first save event should occur"),
@@ -92,7 +93,7 @@ Init <- function(sim) {
   library(R.utils)
   py$sys$path <- insert(py$sys$path, 1, file.path(modulePath(sim), currentModule(sim), "python"))
   py$sys$path <- insert(py$sys$path, 1, file.path(modulePath(sim), currentModule(sim), "python", "ws3"))
-  py$basenames <- params(sim)$.globals$basenames
+  py$basenames <- P(sim)$basenames
   py_run_file(file.path(modulePath(sim), currentModule(sim), "python", "spadesws3_params.py"))
   py$base_year <- P(sim)$base.year
   py$horizon <- P(sim, module=currentModule(sim))$horizon
@@ -157,7 +158,7 @@ loadAges <- function(sim) {
 }
 
 applyHarvest <- function(sim) {
-  #browser()
+
   year <- as.integer(time(sim) - start(sim) + P(sim)$base.year)
   py$base_year <- year
   sim$fm$base_year <- year
