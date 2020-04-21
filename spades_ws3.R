@@ -36,9 +36,7 @@ defineModule(sim, list(
   outputObjects = bind_rows(
     #createsOutput("objectName", "objectClass", "output object description", ...),
     createsOutput("landscape", objectClass = "RasterStack",
-    desc = 'stack containing FMU, THLB, AU, Block ID, and stand age'),
-    createsOutput(objectName = 'rstCurrentHarvest', objectClass = 'RasterLayer',
-                  desc = 'a binary raster representing harvest locations at time(sim)')
+    desc = 'stack containing FMU, THLB, AU, Block ID, and stand age')
   )
 ))
 
