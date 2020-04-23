@@ -4,27 +4,30 @@
 # to all modules. Functions can be used without sim$ as they are namespaced, like functions
 # in R packages. If exact location is required, functions will be: sim$<moduleName>$FunctionName
 defineModule(sim, list(
-  name = "harvesting",
+  name = "spades_ws3",
   description = NA, #"insert module description here",
   keywords = NA, # c("insert key words here"),
   authors = c(person(c("First", "Middle"), "Last", email = "email@example.com", role = c("aut", "cre"))),
   childModules = character(0),
-  version = list(SpaDES.core = "0.2.5.9000", harvesting = "0.0.1"),
+  version = list(SpaDES.core = "0.2.5.9000", spades_ws3 = "0.0.1"),
   spatialExtent = raster::extent(rep(NA_real_, 4)),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
-  documentation = list("README.txt", "harvesting.Rmd"),
+  documentation = list("README.txt", "spades_ws3.Rmd"),
   reqdPkgs = list(),
   parameters = rbind(
-    #defineParameter("paramName", "paramClass", value, min, max, "parameter description
     defineParameter("basenames", "character", NA, NA, NA, "MU baseneames to load"),
-    defineParameter("horizon", "numeric", NA, NA, NA, "ws3 simulation horizon (periods)"),
-    defineParameter(".plotInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first plot event should occur"),
-    defineParameter(".plotInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between plot events"),
-    defineParameter(".saveInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first save event should occur"),
-    defineParameter(".saveInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between save events"),
-    defineParameter(".useCache", "logical", FALSE, NA, NA, "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant")
+    defineParameter("horizon", "numeric", 1, NA, NA, "ws3 simulation horizon (periods)"),
+    defineParameter(".plotInitialTime", "numeric", NA, NA, NA,
+                    "This describes the simulation time at which the first plot event should occur"),
+    defineParameter(".plotInterval", "numeric", 10, NA, NA, "This describes the simulation time interval between plot events"),
+    defineParameter(".saveInitialTime", "numeric", NA, NA, NA,
+                    "This describes the simulation time at which the first save event should occur"),
+    defineParameter(".saveInterval", "numeric", NA, NA, NA,
+                    "This describes the simulation time interval between save events"),
+    defineParameter(".useCache", "logical", FALSE, NA, NA, 
+                    "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant")
   ),
   inputObjects = bind_rows(
     #expectsInput("objectName", "objectClass", "input object description", sourceURL, ...),
@@ -32,14 +35,14 @@ defineModule(sim, list(
   ),
   outputObjects = bind_rows(
     #createsOutput("objectName", "objectClass", "output object description", ...),
-    createsOutput(objectName = NA, objectClass = NA, desc = NA)
+    createsOutput(objectName = 'landscape', objectClass = 'RasterStack', desc = 'raster stack of landscape attributes')
   )
 ))
 
 ## event types
 #   - type `init` is required for initialization
 
-doEvent.harvesting = function(sim, eventTime, eventType) {
+doEvent.spades_ws3 = function(sim, eventTime, eventType) {
   switch(
     eventType,
     init = {
@@ -50,10 +53,10 @@ doEvent.harvesting = function(sim, eventTime, eventType) {
       sim <- Init(sim)
 
       # schedule future event(s)
-      sim <- scheduleEvent(sim, 0, "harvesting", "harvest")
-      sim <- scheduleEvent(sim, 0, "harvesting", "grow")
-      sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "harvesting", "plot")
-      sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "harvesting", "save")
+      sim <- scheduleEvent(sim, start(sim), "spades_ws3", "harvest")
+      sim <- scheduleEvent(sim, start(sim), "spades_ws3", "grow")
+      sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "spades_ws3", "plot")
+      sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "spades_ws3", "save")
     },
     plot = {
       # ! ----- EDIT BELOW ----- ! #
@@ -63,7 +66,7 @@ doEvent.harvesting = function(sim, eventTime, eventType) {
       # schedule future event(s)
 
       # e.g.,
-      #sim <- scheduleEvent(sim, time(sim) + P(sim)$.plotInterval, "harvesting", "plot")
+      #sim <- scheduleEvent(sim, time(sim) + P(sim)$.plotInterval, "spades_ws3", "plot")
 
       # ! ----- STOP EDITING ----- ! #
     },
@@ -77,17 +80,17 @@ doEvent.harvesting = function(sim, eventTime, eventType) {
       # schedule future event(s)
 
       # e.g.,
-      sim <- scheduleEvent(sim, time(sim) + P(sim)$.saveInterval, "harvesting", "save")
+      sim <- scheduleEvent(sim, time(sim) + P(sim)$.saveInterval, "spades_ws3", "save")
 
       # ! ----- STOP EDITING ----- ! #
     },
     harvest = {
       sim <- applyHarvest(sim) 
-      sim <- scheduleEvent(sim, time(sim) + 1, "harvesting", "harvest")
+      sim <- scheduleEvent(sim, time(sim) + 1, "spades_ws3", "harvest")
     },
     grow = {
       sim <- applyGrow(sim)
-      sim <- scheduleEvent(sim, time(sim) + 1, "harvesting", "grow")
+      sim <- scheduleEvent(sim, time(sim) + 1, "spades_ws3", "grow")
     },
     warning(paste("Undefined event type: '", current(sim)[1, "eventType", with = FALSE],
                   "' in module '", current(sim)[1, "moduleName", with = FALSE], "'", sep = ""))
