@@ -224,6 +224,30 @@ def bootstrap_forestmodel(basenames, model_name, model_path, base_year, yld_path
     return fm
 
 
+def clean_shapefiles(basenames, gdb_path, shp_path, snk_epsg, prop_names, prop_types, tolerance, update_area_prop=''):
+    import pathlib
+    import fiona
+    from ws3.common import clean_vector_data, reproject_vector_data
+    from os import listdir, remove
+    from os.path import isfile, join
+    for bn in basenames:
+        print('cleaning GDB', gdb_path(bn), shp_path(bn))
+        if not pathlib.Path(shp_path(bn)).exists(): 
+            pathlib.Path(shp_path(bn)).mkdir()
+        snk1_path, snk2_path = clean_vector_data(gdb_path(bn), shp_path(bn), 'stands', prop_names, 
+                                                 tolerance=tolerance, max_records=None, 
+                                                 theme0=bn, prop_types=prop_types, dst_epsg=snk_epsg, 
+                                                 update_area_prop=update_area_prop)
+        with fiona.open(gdb_path(bn)) as src0, fiona.open(snk1_path) as src1, fiona.open(snk2_path) as src2:
+            print('Polygons in original dataset', len(src0))
+            print('Polygons in clean dataset', len(src1))
+            print('Uncleanable polygons', len(src2))
+        #reproject_vector_data(shp_path(bn)+'/_stands.shp', shp_path(bn)+'/stands.shp', snk_epsg)
+        #_path = '%s/shp/%s.shp' % (dat_path, bn)
+        #_path = shp_path(bn)
+        #for f in [f for f in listdir(_path) if isfile(join(_path, f)) and f.startswith('_stands')]: 
+        #    remove('%s/%s' % (_path, f))
+
 def rasterize_inventory(basenames, shp_path, tif_path, hdt_path, theme_cols, age_col, period_length, base_year,
                         cap_age=None, d=100., verbose=True):
     hdt = {}
