@@ -5,6 +5,11 @@ import sys
 
 ########################################################################################################
 # import ws3 from local copy
+#if use_local_ws3:
+#    ws3_path = os.path.abspath('./ws3')
+#    _path = os.path.abspath(join(dirname(__file__), ws3_path))
+
+#ws3_path = os.path.abspath(join(r.getPaths()['modulePath'], r.currentModule()))
 #ws3_path = os.path.abspath(join(r.getPaths()['modulePath'], r.currentModule()))
 #try:
 #_path = os.path.abspath(join(dirname(__file__), ws3_path))
@@ -43,7 +48,7 @@ from pathlib import Path
 import rasterio
 import shutil
 
-from spadesws3 import rasterize_inventory, read_basenames, compile_basecodes, bootstrap_forestmodel, bootstrap_areas, schedule_harvest, sda
+from spadesws3 import clean_shapefiles, rasterize_inventory, read_basenames, compile_basecodes, bootstrap_forestmodel, bootstrap_areas, schedule_harvest, sda
 
 # configure paths and global variables
 scenario_name = 'base'
@@ -56,15 +61,17 @@ yields_period_length = 10
 yields_x_unit = 'years'
 time_step = 1
 max_age = 1000
-dat_path = os.path.abspath(r.getPaths()['inputPath'])
+try:
+    dat_path = os.path.abspath(r.getPaths()['inputPath'])
+except:
+    dat_path = '../../../input'
 target_path = join(dat_path, 'targets.csv')
-#basenames = read_basenames(dat_path+'/basenames.txt')
 yld_path = '%s/yld.csv' % dat_path
 tolerance = 10.
 clean_inv = False
 rasterize_inv = False
-gdb_path = lambda bn: '%s/gdb/%s.gdb' % (dat_path, bn)
-shp_path = lambda bn: '%s/shp/%s.shp' % (dat_path, bn)
+gdb_path = lambda bn: '%s/gis/gdb/%s.gdb' % (dat_path, bn)
+shp_path = lambda bn: '%s/gis/shp/%s.shp' % (dat_path, bn)
 tif_path = lambda bn: '%s/tif/%s' % (dat_path, bn)
 shp_name = 'stands'
 age_col = 'age'

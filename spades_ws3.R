@@ -35,8 +35,7 @@ defineModule(sim, list(
   ),
   outputObjects = bind_rows(
     #createsOutput("objectName", "objectClass", "output object description", ...),
-    createsOutput("landscape", objectClass = "RasterStack",
-    desc = 'stack containing FMU, THLB, AU, Block ID, and stand age')
+    createsOutput(objectName = 'landscape', objectClass = 'RasterStack', desc = 'raster stack of landscape attributes')
   )
 ))
 
@@ -54,22 +53,34 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
       sim <- Init(sim)
 
       # schedule future event(s)
-      sim <- scheduleEvent(sim, P(sim)$yearOfFirstHarvest, "spades_ws3", "harvest")
-      sim <- scheduleEvent(sim, P(sim)$yearOfFirstHarvest, "spades_ws3", "grow")
+      sim <- scheduleEvent(sim, start(sim), "spades_ws3", "harvest")
+      sim <- scheduleEvent(sim, start(sim), "spades_ws3", "grow")
       sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "spades_ws3", "plot")
       sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "spades_ws3", "save")
-
     },
     plot = {
 
+      #plotFun(sim) # uncomment this, replace with object to plot
+      # schedule future event(s)
+
+      # e.g.,
+      #sim <- scheduleEvent(sim, time(sim) + P(sim)$.plotInterval, "spades_ws3", "plot")
+
+      # ! ----- STOP EDITING ----- ! #
     },
     save = {
 
       sim <- scheduleEvent(sim, time(sim) + P(sim)$.saveInterval, "spades_ws3", "save")
 
+      # schedule future event(s)
+
+      # e.g.,
+      sim <- scheduleEvent(sim, time(sim) + P(sim)$.saveInterval, "spades_ws3", "save")
+
+      # ! ----- STOP EDITING ----- ! #
     },
     harvest = {
-      sim <- applyHarvest(sim)
+      sim <- applyHarvest(sim) 
       sim <- scheduleEvent(sim, time(sim) + 1, "spades_ws3", "harvest")
     },
     grow = {

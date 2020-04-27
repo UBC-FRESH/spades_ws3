@@ -1,2 +1,5 @@
 __pycache__
 python/__pycache__/
+python/.ipynb_checkpoints
+python/clean_stand_shapefile.log
+python/recompile_inventory-workingcopy.ipynb

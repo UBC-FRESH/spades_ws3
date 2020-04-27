@@ -1,0 +1,3 @@
+#[submodule "python/ws3"]
+#	path = python/ws3
+#	url = https://github.com/gparadis/ws3
