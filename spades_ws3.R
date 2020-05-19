@@ -19,6 +19,7 @@ defineModule(sim, list(
   parameters = rbind(
     defineParameter("basenames", "character", NA, NA, NA, "MU baseneames to load"),
     defineParameter("horizon", "numeric", 1, NA, NA, "ws3 simulation horizon (periods)"),
+    defineParameter("scheduler.mode", "character", "optimize", NA, NA, "Switch between 'optimize' and 'areacontrol' harvest scheduler modes"),
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA,
                     "This describes the simulation time at which the first plot event should occur"),
     defineParameter(".plotInterval", "numeric", 10, NA, NA, "This describes the simulation time interval between plot events"),
@@ -171,13 +172,20 @@ loadAges <- function(sim) {
 }
 
 applyHarvest <- function(sim) {
-  #browser()
   year <- as.integer(time(sim) + params(sim)$.globals$base.year)
   py$base_year <- year
   sim$fm$base_year <- year
-  #py$schedule_harvest_kwargslist(sim$fm)
   updateAges(sim)
-  py$simulate_harvest(sim$fm, py$basenames, year) # run aspatial scheduler and allocate to pixels
+  masks <- paste(py$basenames, " 1 ? ?")
+  areas <- c() # bogus placeholder (link this to user-defined input [list of values or function generating list of values])
+  area.scale.factor <- 1. # bogus placeholder (will work)
+  py$simulate_harvest(sim$fm, 
+                      py$basenames, 
+                      year, 
+                      P(sim, module=currentModule(sim))$scheduler.mode, 
+                      masks, 
+                      areas,
+                      area.scale.factor) # run aspatial scheduler and allocate to pixels
   sim$landscape$age <- loadAges(sim)
   return(invisible(sim))
 }

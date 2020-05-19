@@ -272,8 +272,8 @@ def compile_basecodes(hdt, basenames, theme_cols):
     return basecodes
 
 
-def schedule_harvest(fm, basenames, scenario_name='base', util=0.85, param_funcs=None, 
-                     target_path='./input/targets.csv', obj_mode='min_harea', mask=None):
+def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, param_funcs=None, 
+                              target_path='./input/targets.csv', obj_mode='min_harea', mask=None):
     import gurobipy as grb
     p = gen_scen(fm, basenames, scenario_name, util, param_funcs=param_funcs, toffset=0, obj_mode=obj_mode, mask=mask, target_path=target_path)
     m = p.solve()
@@ -290,6 +290,31 @@ def schedule_harvest(fm, basenames, scenario_name='base', util=0.85, param_funcs
                       recourse_enabled=True,
                       verbose=False,
                       compile_c_ycomps=True)
+    return sch
+
+
+def schedule_harvest_areacontrol(fm, masks=None, areas=None, period=1, 
+                                 acode='harvest', util=0.85, mask=None, area_scale_factor=1., verbose=False):
+    if not areas:
+        if not masks: masks = ['? 1 ? ?']
+        areas = []
+        # calculated area-weighted mean CMAI age for each masked DT set
+        for mask in masks:
+            awr = []
+            dtype_keys = fm.unmask(mask)
+            for dtk in dtype_keys:
+                dt = fm.dtypes[dtk]
+                area = dt.area(0)
+                cmai_age = dt.ycomp('totvol').mai().ytp().lookup(0)
+                awr.append(area * cmai_age)
+            r = sum(awr)  / fm.inventory(0, mask=mask)
+            ta = (1/r) * fm.inventory(0, mask=mask) * area_scale_factor
+            areas.append(ta)
+    print(masks, areas)
+    for mask, target_area in zip(masks, areas):
+        print(mask, target_area)
+        fm.areaselector.operate(period, acode, target_area, mask=mask, verbose=verbose)
+    sch = fm.compile_schedule()
     return sch
 
 
