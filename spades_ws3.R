@@ -23,11 +23,16 @@ defineModule(sim, list(
     defineParameter("horizon", "numeric", 1, NA, NA, "ws3 simulation horizon (periods)"),
     defineParameter("tifPath", 'character', 'tif', NA, NA, desc = 'name of directory with tifs in inputs'),
     defineParameter("yearOfFirstHarvest", 'numeric', start(sim), NA, NA, "year to schedule first harvest"),
-    defineParameter(".plotInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first plot event should occur"),
-    defineParameter(".plotInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between plot events"),
-    defineParameter(".saveInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first save event should occur"),
-    defineParameter(".saveInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between save events"),
-    defineParameter(".useCache", "logical", FALSE, NA, NA, "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant")
+    defineParameter("scheduler.mode", "character", "optimize", NA, NA, "Switch between 'optimize' and 'areacontrol' harvest scheduler modes"),
+    defineParameter(".plotInitialTime", "numeric", NA, NA, NA,
+                    "This describes the simulation time at which the first plot event should occur"),
+    defineParameter(".plotInterval", "numeric", 10, NA, NA, "This describes the simulation time interval between plot events"),
+    defineParameter(".saveInitialTime", "numeric", NA, NA, NA,
+                    "This describes the simulation time at which the first save event should occur"),
+    defineParameter(".saveInterval", "numeric", NA, NA, NA,
+                    "This describes the simulation time interval between save events"),
+    defineParameter(".useCache", "logical", FALSE, NA, NA, 
+                    "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant")
   ),
   inputObjects = bind_rows(
     #expectsInput("objectName", "objectClass", "input object description", sourceURL, ...),
@@ -171,10 +176,17 @@ applyHarvest <- function(sim) {
   year <- as.integer(time(sim) - start(sim) + P(sim)$base.year)
   py$base_year <- year
   sim$fm$base_year <- year
-  #py$schedule_harvest_kwargslist(sim$fm)
   updateAges(sim)
-
-  py$simulate_harvest(sim$fm, py$basenames, year) # run aspatial scheduler and allocate to pixels
+  masks <- paste(py$basenames, " 1 ? ?")
+  areas <- c() # bogus placeholder (link this to user-defined input [list of values or function generating list of values])
+  area.scale.factor <- 1. # bogus placeholder (will work)
+  py$simulate_harvest(sim$fm, 
+                      py$basenames, 
+                      year, 
+                      P(sim, module=currentModule(sim))$scheduler.mode, 
+                      masks, 
+                      areas,
+                      area.scale.factor) # run aspatial scheduler and allocate to pixels
   sim$landscape$age <- loadAges(sim)
   return(invisible(sim))
 }

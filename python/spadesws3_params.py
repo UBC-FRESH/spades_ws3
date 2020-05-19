@@ -48,7 +48,7 @@ from pathlib import Path
 import rasterio
 import shutil
 
-from spadesws3 import clean_shapefiles, rasterize_inventory, read_basenames, compile_basecodes, bootstrap_forestmodel, bootstrap_areas, schedule_harvest, sda
+from spadesws3 import clean_shapefiles, rasterize_inventory, read_basenames, compile_basecodes, bootstrap_forestmodel, bootstrap_areas, schedule_harvest_optimize, schedule_harvest_areacontrol, sda
 
 # configure paths and global variables
 scenario_name = 'base'
@@ -178,13 +178,23 @@ def bootstrap_forestmodel_kwargs():
     return bootstrap_forestmodel(**kwargs[0])
 
 
-def simulate_harvest(fm, basenames, year):
+def simulate_harvest(fm, basenames, year, 
+                     mode='optimize', 
+                     masks=None, 
+                     areas=None,
+                     area_scale_factor=1.):
     bootstrap_areas(fm, basenames, tif_path, hdt, year, new_dts=False)
     #fm.compile_actions()
     #fm.reset_actions()
     fm.initialize_areas()
     #fm.grow()
-    schedule_harvest(fm, basenames, target_path=target_path)
+    if mode == 'optimize':
+        schedule_harvest_optimize(fm, basenames, target_path=target_path)
+    elif mode == 'areacontrol':
+        schedule_harvest_areacontrol(fm, masks=masks, areas=areas, area_scale_factor=area_scale_factor)
+    else:
+        # bad mode value
+        raise ValueError('Bad mode value')
     sda(fm, basenames, 1, tif_path, hdt, sda_mode=sda_mode)
 
 
