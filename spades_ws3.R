@@ -18,7 +18,8 @@ defineModule(sim, list(
   reqdPkgs = list('R.utils'),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description
-    defineParameter("basenames", "character", NA, NA, NA, 'MU baseneames to load'),
+    defineParameter("basenames", "character", NA, NA, NA,
+                    desc = 'vector of MU baseneames to load, beginning with tsa, e.g. "tsa40"'),
     defineParameter("base.year", 'numeric', 2015, NA, NA, 'base year of forest inventory data'),
     defineParameter("horizon", "numeric", 1, NA, NA, "ws3 simulation horizon (periods)"),
     defineParameter("tifPath", 'character', 'tif', NA, NA, desc = 'name of directory with tifs in inputs'),
@@ -104,6 +105,14 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
 
 ### template initialization
 Init <- function(sim) {
+
+  if (is.null(P(sim)$basenames)) {
+    stop(paste("please supply TSAs to basenames param in", currentModule(sim)))
+  }
+  # workaround for reticulate problem with list conversion
+  if (length(P(sim)$basenames) == 1 & class(P(sim)$basenames) == 'character') {
+    sim@params$spades_ws3$basenames <- as.list(P(sim)$basenames)
+  }
 
   py$sys$path <- insert(py$sys$path, 1, file.path(modulePath(sim), currentModule(sim), "python"))
   py$sys$path <- insert(py$sys$path, 1, file.path(modulePath(sim), currentModule(sim), "python", "ws3"))
