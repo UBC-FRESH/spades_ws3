@@ -117,6 +117,7 @@ raster_d = 250
 
 kwargs = []
 if 1:
+    print('basenames', basenames)
     hdt = {bn:pickle.load(open('%s/hdt_%s.pkl' % (hdt_path, bn), 'rb')) for bn in basenames}
     basecodes = compile_basecodes(hdt, basenames, theme_cols)
     kwargs.append({'basenames':basenames,
@@ -183,7 +184,9 @@ def simulate_harvest(fm, basenames, year,
                      masks=None, 
                      areas=None,
                      area_scale_factor=1.):
+    print('sh basenames', basenames)
     bootstrap_areas(fm, basenames, tif_path, hdt, year, new_dts=False)
+    #assert False
     #fm.compile_actions()
     #fm.reset_actions()
     fm.initialize_areas()

@@ -127,6 +127,7 @@ def bootstrap_themes(fm, theme_cols=['theme0', 'theme1', 'theme2', 'theme3'],
     
 def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
     #fm.dtypes = {}
+    print('ba basenames', basenames)
     if not year:
       for bn in basenames:
           print('copying', '%s/inventory_init.tif' % rst_path(bn), '%s/inventory_%i.tif' % (rst_path(bn), fm.base_year))
@@ -296,11 +297,13 @@ def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, pa
 def schedule_harvest_areacontrol(fm, masks=None, areas=None, period=1, 
                                  acode='harvest', util=0.85, mask=None, area_scale_factor=1., verbose=False):
     if not areas:
+        print('areas == False')
         if not masks: masks = ['? 1 ? ?']
         areas = []
         # calculated area-weighted mean CMAI age for each masked DT set
         for mask in masks:
             awr = []
+            print('areacontrol mask', mask)
             dtype_keys = fm.unmask(mask)
             for dtk in dtype_keys:
                 dt = fm.dtypes[dtk]

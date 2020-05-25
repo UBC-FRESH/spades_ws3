@@ -15,12 +15,13 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "spades_ws3.Rmd"),
-  reqdPkgs = list(),
+  reqdPkgs = list('R.utils'),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description
     defineParameter("basenames", "character", NA, NA, NA, 'MU baseneames to load'),
     defineParameter("base.year", 'numeric', 2015, NA, NA, 'base year of forest inventory data'),
     defineParameter("horizon", "numeric", 1, NA, NA, "ws3 simulation horizon (periods)"),
+    defineParameter("hdtPath", "character", "hdt", NA, NA, 'hdt path for pickle files'),
     defineParameter("tifPath", 'character', 'tif', NA, NA, desc = 'name of directory with tifs in inputs'),
     defineParameter("yearOfFirstHarvest", 'numeric', start(sim), NA, NA, "year to schedule first harvest"),
     defineParameter("scheduler.mode", "character", "optimize", NA, NA, "Switch between 'optimize' and 'areacontrol' harvest scheduler modes"),
@@ -31,7 +32,7 @@ defineModule(sim, list(
                     "This describes the simulation time at which the first save event should occur"),
     defineParameter(".saveInterval", "numeric", NA, NA, NA,
                     "This describes the simulation time interval between save events"),
-    defineParameter(".useCache", "logical", FALSE, NA, NA, 
+    defineParameter(".useCache", "logical", FALSE, NA, NA,
                     "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant")
   ),
   inputObjects = bind_rows(
@@ -85,7 +86,7 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
       # ! ----- STOP EDITING ----- ! #
     },
     harvest = {
-      sim <- applyHarvest(sim) 
+      sim <- applyHarvest(sim)
       sim <- scheduleEvent(sim, time(sim) + 1, "spades_ws3", "harvest")
     },
     grow = {
@@ -104,13 +105,15 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
 
 ### template initialization
 Init <- function(sim) {
-  library(R.utils)
+
   py$sys$path <- insert(py$sys$path, 1, file.path(modulePath(sim), currentModule(sim), "python"))
   py$sys$path <- insert(py$sys$path, 1, file.path(modulePath(sim), currentModule(sim), "python", "ws3"))
   py$basenames <- P(sim)$basenames
+  #browser()
   py_run_file(file.path(modulePath(sim), currentModule(sim), "python", "spadesws3_params.py"))
   py$base_year <- P(sim)$base.year
-  py$horizon <- P(sim, module=currentModule(sim))$horizon
+  py$horizon <- P(sim)$horizon
+  #browser()
   sim$fm <- py$bootstrap_forestmodel_kwargs()
   return(invisible(sim))
 }
@@ -138,7 +141,7 @@ plotFun <- function(sim) {
 
 updateAges <- function(sim) {
   #browser()
-  year <- as.integer(time(sim) - start(sim) + P(sim)$base.year)
+  year <- as.integer(time(sim) - start(sim) + P(sim, module = currentModule(sim))$base.year)
   files <- sapply(P(sim, module = currentModule(sim))$basenames,
                   function(bn) file.path(inputPath(sim),
                                          P(sim, module = currentModule(sim))$tifPath,
@@ -146,8 +149,10 @@ updateAges <- function(sim) {
                                          paste("inventory_", toString(year), ".tif", sep="")))
   rs.list <- sapply(files, stack) # one stack per MU
   rs.list <- rapply(rs.list,
-                    function(rs) {
-                      rs[[2]] <- mask(crop(sim$landscape$age, rs[[2]]), rs[[2]])
+                    function(rs, landscapeAge = sim$landscape$age) {
+                      #browser()
+                      rs[[2]] <- crop(sim$landscape$age, rs[[2]]) %>%
+                        mask(., rs[[2]])
                       rs[[2]][is.nan(rs[[2]])] <- NA
                       return(rs)})
   mapply(writeRaster, rs.list, files, format='GTiff', overwrite=TRUE, datatype='INT4S')
@@ -156,35 +161,43 @@ updateAges <- function(sim) {
 
 loadAges <- function(sim) {
   #browser()
-  year <- as.integer(time(sim) - start(sim) + P(sim)$base.year)
+  year <- as.integer(time(sim) - start(sim) + P(sim, module = currentModule(sim))$base.year)
   files <- sapply(P(sim, module = currentModule(sim))$basenames,
                   function(bn) file.path(inputPath(sim),
                                          P(sim, module = currentModule(sim))$tifPath,
                                          bn,
                                          paste("inventory_", toString(year), ".tif", sep="")))
   x <- sapply(files, raster, band=2)
+   if (length(x) > 1) {
+     x$fun <- mean
+     x$na.rm <- TRUE
+     browser()
+     r <- do.call(mosaic, x)
+     r[is.nan(r)] <- NA # replace NaN values with NA
+   } else {
+     r <- x[[1]]
+   }
+
   names(x) <- NULL
-  x$fun <- mean
-  x$na.rm <- TRUE
-  r <- do.call(mosaic, x)
-  r[is.nan(r)] <- NA # replace NaN values with NA
+
   return(r)
 }
 
 applyHarvest <- function(sim) {
-
-  year <- as.integer(time(sim) - start(sim) + P(sim)$base.year)
+  #browser()
+  year <- as.integer(time(sim) - start(sim) + P(sim, module = currentModule(sim))$base.year)
   py$base_year <- year
   sim$fm$base_year <- year
   updateAges(sim)
   masks <- paste(py$basenames, " 1 ? ?")
   areas <- c() # bogus placeholder (link this to user-defined input [list of values or function generating list of values])
   area.scale.factor <- 1. # bogus placeholder (will work)
-  py$simulate_harvest(sim$fm, 
-                      py$basenames, 
-                      year, 
-                      P(sim, module=currentModule(sim))$scheduler.mode, 
-                      masks, 
+  #browser()
+  py$simulate_harvest(sim$fm,
+                      list(py$basenames),
+                      year,
+                      P(sim, module=currentModule(sim))$scheduler.mode,
+                      list(masks),
                       areas,
                       area.scale.factor) # run aspatial scheduler and allocate to pixels
   sim$landscape$age <- loadAges(sim)
