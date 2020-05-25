@@ -21,7 +21,6 @@ defineModule(sim, list(
     defineParameter("basenames", "character", NA, NA, NA, 'MU baseneames to load'),
     defineParameter("base.year", 'numeric', 2015, NA, NA, 'base year of forest inventory data'),
     defineParameter("horizon", "numeric", 1, NA, NA, "ws3 simulation horizon (periods)"),
-    defineParameter("hdtPath", "character", "hdt", NA, NA, 'hdt path for pickle files'),
     defineParameter("tifPath", 'character', 'tif', NA, NA, desc = 'name of directory with tifs in inputs'),
     defineParameter("yearOfFirstHarvest", 'numeric', start(sim), NA, NA, "year to schedule first harvest"),
     defineParameter("scheduler.mode", "character", "optimize", NA, NA, "Switch between 'optimize' and 'areacontrol' harvest scheduler modes"),
@@ -177,7 +176,6 @@ loadAges <- function(sim) {
    } else {
      r <- x[[1]]
    }
-
   names(x) <- NULL
 
   return(r)
