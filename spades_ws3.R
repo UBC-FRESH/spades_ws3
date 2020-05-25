@@ -168,9 +168,9 @@ loadAges <- function(sim) {
                                          paste("inventory_", toString(year), ".tif", sep="")))
   x <- sapply(files, raster, band=2)
    if (length(x) > 1) {
+     names(x)[1:2] <- c("x", "y") #from the raster pkg mosaic help. Needs x and y (!?)
      x$fun <- mean
      x$na.rm <- TRUE
-     browser()
      r <- do.call(mosaic, x)
      r[is.nan(r)] <- NA # replace NaN values with NA
    } else {
@@ -190,7 +190,8 @@ applyHarvest <- function(sim) {
   masks <- paste(py$basenames, " 1 ? ?")
   areas <- c() # bogus placeholder (link this to user-defined input [list of values or function generating list of values])
   area.scale.factor <- 1. # bogus placeholder (will work)
-  #browser()
+
+  if (length(P(sim)$basenames) == 1) {
   py$simulate_harvest(sim$fm,
                       list(py$basenames),
                       year,
@@ -198,7 +199,18 @@ applyHarvest <- function(sim) {
                       list(masks),
                       areas,
                       area.scale.factor) # run aspatial scheduler and allocate to pixels
+  } else {
+    py$simulate_harvest(sim$fm,
+                        py$basenames,
+                        year,
+                        P(sim, module=currentModule(sim))$scheduler.mode,
+                        masks,
+                        areas,
+                        area.scale.factor)
+  }
   sim$landscape$age <- loadAges(sim)
+
+
   return(invisible(sim))
 }
 
