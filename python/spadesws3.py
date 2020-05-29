@@ -128,10 +128,12 @@ def bootstrap_themes(fm, theme_cols=['theme0', 'theme1', 'theme2', 'theme3'],
 def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
     #fm.dtypes = {}
     if not year:
-      for bn in basenames:
-          print('copying', '%s/inventory_init.tif' % rst_path(bn), '%s/inventory_%i.tif' % (rst_path(bn), fm.base_year))
-          shutil.copyfile('%s/inventory_init.tif' % rst_path(bn), '%s/inventory_%i.tif' % (rst_path(bn), fm.base_year))
-      year = fm.base_year
+        for bn in basenames:
+            print('copying', '%s/inventory_init.tif' % rst_path(bn), 
+                  '%s/inventory_%i.tif' % (rst_path(bn), fm.base_year))
+            shutil.copyfile('%s/inventory_init.tif' % rst_path(bn), 
+                            '%s/inventory_%i.tif' % (rst_path(bn), fm.base_year))
+        year = fm.base_year
     for dt in fm.dtypes.values(): # yuck
         dt.reset_areas(0)
         dt.reset_areas()
@@ -143,6 +145,7 @@ def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
             pxa = pow(src.transform.a, 2) * 0.0001 # pixel area (hectares)
             bh, ba = src.read(1), src.read(2)
             for h, dt in hdt[bn].items():
+                #from IPython import embed; embed()
                 ra = ba[np.where(bh == h)] # match themes hash value
                 if new_dts:
                     fm.dtypes[dt] = ws3.forest.DevelopmentType(dt, fm)
@@ -293,13 +296,15 @@ def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, pa
     return sch
 
 
-def schedule_harvest_areacontrol(fm, masks=None, areas=None, period=1, 
-                                 acode='harvest', util=0.85, mask=None, area_scale_factor=1., verbose=False):
-    if not areas:
-        if not masks: masks = ['? 1 ? ?']
-        areas = []
-        # calculated area-weighted mean CMAI age for each masked DT set
-        for mask in masks:
+def schedule_harvest_areacontrol(fm, period=1, acode='harvest', util=0.85, 
+                                 target_masks=None, target_areas=None, target_scalefactors=None, 
+                                 verbose=False):
+    print(target_masks, target_areas, target_scalefactors) # debug
+    fm.reset_actions()
+    if not target_areas:
+        target_masks = ['? 1 ? ?'] if not target_masks else target_masks
+        target_areas = []
+        for i, mask in enumerate(target_masks): # compute area-weighted mean CMAI age for each masked DT set
             awr = []
             dtype_keys = fm.unmask(mask)
             for dtk in dtype_keys:
@@ -308,11 +313,10 @@ def schedule_harvest_areacontrol(fm, masks=None, areas=None, period=1,
                 cmai_age = dt.ycomp('totvol').mai().ytp().lookup(0)
                 awr.append(area * cmai_age)
             r = sum(awr)  / fm.inventory(0, mask=mask)
-            ta = (1/r) * fm.inventory(0, mask=mask) * area_scale_factor
-            areas.append(ta)
-    print(masks, areas)
-    for mask, target_area in zip(masks, areas):
-        print(mask, target_area)
+            asf = 1. if not target_scalefactors else target_scalefactors[i]  
+            ta = (1/r) * fm.inventory(0, mask=mask) * asf
+            target_areas.append(ta)
+    for mask, target_area in zip(target_masks, target_areas):
         fm.areaselector.operate(period, acode, target_area, mask=mask, verbose=verbose)
     sch = fm.compile_schedule()
     return sch
