@@ -15,7 +15,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "spades_ws3.Rmd"),
-  reqdPkgs = list('R.utils'),
+  reqdPkgs = list('R.utils', 'reticulate'),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description
     defineParameter("basenames", "character", NA, NA, NA,
@@ -114,14 +114,17 @@ Init <- function(sim) {
     sim@params$spades_ws3$basenames <- as.list(P(sim)$basenames)
   }
 
-  py$sys$path <- insert(py$sys$path, 1, file.path(modulePath(sim), currentModule(sim), "python"))
-  py$sys$path <- insert(py$sys$path, 1, file.path(modulePath(sim), currentModule(sim), "python", "ws3"))
+  thisModulesPath <- grep(pattern = paste0(currentModule(sim), "$"), x = list.files(modulePath(sim))) %>%
+    list.files(path = modulePath(sim), full.names = TRUE)[.]
+
+  py$sys$path <- insert(py$sys$path, 1, file.path(thisModulesPath, "python"))
+  py$sys$path <- insert(py$sys$path, 1, file.path(thisModulesPath, "python", "ws3"))
   py$basenames <- P(sim)$basenames
-  #browser()
-  py_run_file(file.path(modulePath(sim), currentModule(sim), "python", "spadesws3_params.py"))
+
+  py_run_file(file.path(thisModulesPath, "python", "spadesws3_params.py"))
   py$base_year <- P(sim)$base.year
   py$horizon <- P(sim)$horizon
-  #browser()
+
   sim$fm <- py$bootstrap_forestmodel_kwargs()
   return(invisible(sim))
 }
