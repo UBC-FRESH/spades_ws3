@@ -24,15 +24,13 @@ defineModule(sim, list(
     defineParameter("target.masks", "character", NULL, NA, NA, "Target masks (in '? ? ? ?' format). Only applicable if using 'areacontrol' scheduler mode."),
     defineParameter("target.areas", "numermic", NULL, NA, NA, "Target areas (ha).  Only applicable if using 'areacontrol' scheduler mode."),
     defineParameter("target.scalefactors", "numeric", NULL, NA, NA, "Target areas scale factors.  Only applicable if using 'areacontrol' scheduler mode."),
-    defineParameter(".plotInitialTime", "numeric", NA, NA, NA,
-                    "This describes the simulation time at which the first plot event should occur"),
-    defineParameter(".plotInterval", "numeric", 10, NA, NA, "This describes the simulation time interval between plot events"),
-    defineParameter(".saveInitialTime", "numeric", NA, NA, NA,
-                    "This describes the simulation time at which the first save event should occur"),
-    defineParameter(".saveInterval", "numeric", NA, NA, NA,
-                    "This describes the simulation time interval between save events"),
-    defineParameter(".useCache", "logical", FALSE, NA, NA, 
-                    "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant")
+    defineParameter("tifPath", 'character', 'tif', NA, NA, desc = 'name of directory with tifs in inputs'),
+    defineParameter("yearOfFirstHarvest", 'numeric', start(sim), NA, NA, "year to schedule first harvest"),
+    defineParameter(".plotInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first plot event should occur"),
+    defineParameter(".plotInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between plot events"),
+    defineParameter(".saveInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first save event should occur"),
+    defineParameter(".saveInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between save events"),
+    defineParameter(".useCache", "logical", FALSE, NA, NA, "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant")
   ),
   inputObjects = bind_rows(
     expectsInput(objectName = "landscape", objectClass = "RasterStack", desc = "stand age", sourceURL = NA)
@@ -55,7 +53,10 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
       sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "spades_ws3", "save")
     },
     plot = {},
-    save = {},
+    save = {
+      sim <- Save(sim)
+      sim <- scheduleEvent(sim, time(sim) + P(sim)$.saveInterval, "spades_ws3", "save")
+    },
     harvest = {
       sim <- applyHarvest(sim) 
       sim <- scheduleEvent(sim, time(sim) + 1, "spades_ws3", "harvest")
@@ -64,6 +65,7 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
       sim <- applyGrow(sim)
       sim <- scheduleEvent(sim, time(sim) + 1, "spades_ws3", "grow")
     },
+
     warning(paste("Undefined event type: '", current(sim)[1, "eventType", with = FALSE],
                   "' in module '", current(sim)[1, "moduleName", with = FALSE], "'", sep = ""))
   )
@@ -98,20 +100,20 @@ plotFun <- function(sim) {
 }
 
 
+
 updateAges <- function(sim, offset = 0) {
   p <- P(sim, module=currentModule(sim))  
-  year <- as.integer(time(sim) + p$base.year)
+  year <- as.integer(time(sim) - start(sim) + p$base.year)
   files1 <- sapply(p$basenames,
-                  function(bn) file.path(inputPath(sim),
-                                         p$tifPath,
-                                         bn,
-                                         paste("inventory_", toString(year), ".tif", sep="")))
-  files2 <- sapply(P(sim, module = currentModule(sim))$basenames,
+                   function(bn) file.path(inputPath(sim),
+                                          p$tifPath,
+                                          bn,
+                                          paste("inventory_", toString(year), ".tif", sep="")))
+  files2 <- sapply(p$basenames,
                    function(bn) file.path(inputPath(sim),
                                           p$tifPath,
                                           bn,
                                           paste("inventory_", toString(year+offset), ".tif", sep="")))
-  #browser()
   rs.list <- sapply(files1, stack) # one stack per MU
   rs.list <- rapply(rs.list, 
                     function(rs) {
@@ -124,7 +126,7 @@ updateAges <- function(sim, offset = 0) {
 
 loadAges <- function(sim) {
   p <- P(sim, module=currentModule(sim))
-  year <- as.integer(time(sim) + p$base.year)
+  year <- as.integer(time(sim) - start(sim) + p$base.year)
   files <- sapply(p$basenames,
                   function(bn) file.path(inputPath(sim),
                                          p$tifPath,
@@ -142,7 +144,7 @@ loadAges <- function(sim) {
 
 applyHarvest <- function(sim) {
   p <- P(sim, module=currentModule(sim))
-  year <- as.integer(time(sim) + p$base.year)
+  year <- as.integer(time(sim) - start(sim) + p$base.year)
   py$base_year <- year
   sim$fm$base_year <- year
   updateAges(sim)
@@ -159,7 +161,6 @@ applyHarvest <- function(sim) {
 
 
 applyGrow <- function(sim) {
-    #browser()
   sim$landscape$age <- sim$landscape$age + 1 
   updateAges(sim, offset=1)
   return(invisible(sim))
