@@ -15,8 +15,9 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "spades_ws3.Rmd"),
-  reqdPkgs = list(),
+  reqdPkgs = list('R.utils', 'reticulate'),
   parameters = rbind(
+    defineParameter("verbose", "numeric", 0, NA, NA, "console output verbosity level"),
     defineParameter("basenames", "character", NA, NA, NA, "MU baseneames to load"),
     defineParameter("horizon", "numeric", 1L, NA, NA, "ws3 simulation horizon (periods)"),
     defineParameter("base.year", "numeric", 2015L, NA, NA, "ws3 simulation base year"),
@@ -58,14 +59,13 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
       sim <- scheduleEvent(sim, time(sim) + P(sim)$.saveInterval, "spades_ws3", "save")
     },
     harvest = {
-      sim <- applyHarvest(sim) 
+      sim <- applyHarvest(sim)
       sim <- scheduleEvent(sim, time(sim) + 1, "spades_ws3", "harvest")
     },
     grow = {
       sim <- applyGrow(sim)
       sim <- scheduleEvent(sim, time(sim) + 1, "spades_ws3", "grow")
     },
-
     warning(paste("Undefined event type: '", current(sim)[1, "eventType", with = FALSE],
                   "' in module '", current(sim)[1, "moduleName", with = FALSE], "'", sep = ""))
   )
@@ -75,14 +75,16 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
 ## event functions
 
 Init <- function(sim) {
-    p <- P(sim, module=currentModule(sim))
     library(R.utils)
-    py$sys$path <- insert(py$sys$path, 1, file.path(modulePath(sim), currentModule(sim), "python"))
-    py$sys$path <- insert(py$sys$path, 1, file.path(modulePath(sim), currentModule(sim), "python", "ws3"))
-    py$basenames <- p$basenames
-    py_run_file(file.path(modulePath(sim), currentModule(sim), "python", "spadesws3_params.py"))
-    py$base_year <- p$base.year
-    py$horizon <- p$horizon
+    if (is.null(P(sim)$basenames)) stop(paste("'basenames' parameter value not specified in", currentModule(sim)))
+    cmp <- grep(pattern = paste0(currentModule(sim), "$"), x = list.files(modulePath(sim))) %>%
+           list.files(path = modulePath(sim), full.names = TRUE)[.] # current module path
+    py$sys$path <- insert(py$sys$path, 1, file.path(cmp, "python"))
+    py$sys$path <- insert(py$sys$path, 1, file.path(cmp, "python", "ws3"))
+    py$basenames <- P(sim)$basenames
+    py_run_file(file.path(cmp, "python", "spadesws3_params.py"))
+    py$base_year <- P(sim)$base.year
+    py$horizon <- P(sim)$horizon
     sim$fm <- py$bootstrap_forestmodel_kwargs()
     py$fm <- sim$fm
     return(invisible(sim))
@@ -100,61 +102,63 @@ plotFun <- function(sim) {
 }
 
 
-
 updateAges <- function(sim, offset = 0) {
-  p <- P(sim, module=currentModule(sim))  
-  year <- as.integer(time(sim) - start(sim) + p$base.year)
-  files1 <- sapply(p$basenames,
+  year <- as.integer(time(sim) - start(sim) + P(sim)$base.year)
+  files1 <- sapply(P(sim)$basenames,
                    function(bn) file.path(inputPath(sim),
-                                          p$tifPath,
+                                          P(sim)$tifPath,
                                           bn,
                                           paste("inventory_", toString(year), ".tif", sep="")))
-  files2 <- sapply(p$basenames,
+  files2 <- sapply(P(sim)$basenames,
                    function(bn) file.path(inputPath(sim),
-                                          p$tifPath,
+                                          P(sim)$tifPath,
                                           bn,
                                           paste("inventory_", toString(year+offset), ".tif", sep="")))
   rs.list <- sapply(files1, stack) # one stack per MU
   rs.list <- rapply(rs.list, 
                     function(rs) {
-                      rs[[2]] <- mask(crop(sim$landscape$age, rs[[2]]), rs[[2]])
-                      rs[[2]][is.nan(rs[[2]])] <- NA
-                      return(rs)})
+                    rs[[2]] <- crop(sim$landscape$age, rs[[2]]) %>% mask(., rs[[2]])
+                    rs[[2]][is.nan(rs[[2]])] <- NA
+                    return(rs)})
   mapply(writeRaster, rs.list, files2, format='GTiff', overwrite=TRUE, datatype='INT4S') 
   return(invisible(sim))
 }
 
+
 loadAges <- function(sim) {
-  p <- P(sim, module=currentModule(sim))
-  year <- as.integer(time(sim) - start(sim) + p$base.year)
-  files <- sapply(p$basenames,
+  year <- as.integer(time(sim) - start(sim) + P(sim)$base.year)
+  files <- sapply(P(sim)$basenames,
                   function(bn) file.path(inputPath(sim),
-                                         p$tifPath,
+                                         P(sim)$tifPath,
                                          bn,
                                          paste("inventory_", toString(year), ".tif", sep="")))
   x <- sapply(files, raster, band=2)
+  if (length(x) > 1) {
+    names(x)[1:2] <- c("x", "y") #from the raster pkg mosaic help. Needs x and y (!?)
+    x$fun <- mean
+    x$na.rm <- TRUE
+    r <- do.call(mosaic, x)
+    r[is.nan(r)] <- NA # replace NaN values with NA
+  } else {
+    r <- x[[1]]
+  }
   names(x) <- NULL
-  x$fun <- mean
-  x$na.rm <- TRUE
-  r <- do.call(mosaic, x)
-  r[is.nan(r)] <- NA # replace NaN values with NA
   return(r)
 }
 
-
 applyHarvest <- function(sim) {
-  p <- P(sim, module=currentModule(sim))
-  year <- as.integer(time(sim) - start(sim) + p$base.year)
+  year <- as.integer(time(sim) - start(sim) + P(sim)$base.year)
   py$base_year <- year
   sim$fm$base_year <- year
   updateAges(sim)
   py$simulate_harvest(fm = sim$fm, 
-                      basenames = py$basenames, 
+                      basenames = P(sim)$basenames, 
                       year = year, 
-                      mode = p$scheduler.mode, 
-                      target_masks = p$target.masks, 
-                      target_areas = p$target.areas,
-                      target_scalefactors = p$target.scalefactors) 
+                      mode = P(sim)$scheduler.mode, 
+                      target_masks = P(sim)$target.masks, 
+                      target_areas = P(sim)$target.areas,
+                      target_scalefactors = P(sim)$target.scalefactors,
+                      verbose = P(sim)$verbose) 
   sim$landscape$age <- loadAges(sim)
   return(invisible(sim))
 }

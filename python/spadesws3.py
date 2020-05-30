@@ -126,7 +126,7 @@ def bootstrap_themes(fm, theme_cols=['theme0', 'theme1', 'theme2', 'theme3'],
 
     
 def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
-    #fm.dtypes = {}
+    print('bootstrap_areas', basenames)
     if not year:
         for bn in basenames:
             print('copying', '%s/inventory_init.tif' % rst_path(bn), 
@@ -139,22 +139,16 @@ def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
         dt.reset_areas()
     for bn in basenames:
         _sumarea = 0.
-        #print('bootstrap_areas', bn, year)
-        #print('%s/inventory_%i.tif' % (rst_path(bn), year))
         with rasterio.open('%s/inventory_%i.tif' % (rst_path(bn), year), 'r') as src:
             pxa = pow(src.transform.a, 2) * 0.0001 # pixel area (hectares)
             bh, ba = src.read(1), src.read(2)
             for h, dt in hdt[bn].items():
-                #from IPython import embed; embed()
                 ra = ba[np.where(bh == h)] # match themes hash value
                 if new_dts:
                     fm.dtypes[dt] = ws3.forest.DevelopmentType(dt, fm)
-                #else:
-                #    fm.dtypes[dt].reset_areas() 
                 for age in np.unique(ra):
                     area = len(ra[np.where(ra == age)]) * pxa
                     _sumarea += area
-                    #print(bn, dt, age, area)
                     fm.dtypes[dt].area(0, age, area)
         print('bootstrap_areas', bn, year, pxa, _sumarea)
 
@@ -299,7 +293,6 @@ def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, pa
 def schedule_harvest_areacontrol(fm, period=1, acode='harvest', util=0.85, 
                                  target_masks=None, target_areas=None, target_scalefactors=None, 
                                  verbose=False):
-    print(target_masks, target_areas, target_scalefactors) # debug
     fm.reset_actions()
     if not target_areas:
         target_masks = ['? 1 ? ?'] if not target_masks else target_masks
@@ -317,6 +310,8 @@ def schedule_harvest_areacontrol(fm, period=1, acode='harvest', util=0.85,
             ta = (1/r) * fm.inventory(0, mask=mask) * asf
             target_areas.append(ta)
     for mask, target_area in zip(target_masks, target_areas):
+        if verbose > 0:
+            print('calling areaselector', period, acode, target_area, mask)
         fm.areaselector.operate(period, acode, target_area, mask=mask, verbose=verbose)
     sch = fm.compile_schedule()
     return sch

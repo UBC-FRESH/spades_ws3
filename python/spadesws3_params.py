@@ -22,8 +22,8 @@ from ws3.spatial import ForestRaster
 from ws3.common import clean_vector_data, reproject_vector_data, rasterize_stands, hash_dt, warp_raster
 ########################################################################################################
 
-print(os.getcwd())
-print(os.sys.path)
+#print(os.getcwd())
+#print(os.sys.path)
 
 import numpy as np
 import pandas as pd
@@ -110,7 +110,6 @@ run_sda = True
 raster_d = 250
 
 hdt = {bn:pickle.load(open('%s/hdt_%s.pkl' % (hdt_path, bn), 'rb')) for bn in basenames}
-
 def kwargs():
     basecodes = compile_basecodes(hdt, basenames, theme_cols)
     kwargs = {'basenames':basenames,
@@ -142,7 +141,8 @@ def simulate_harvest(fm, basenames, year,
                      mode='optimize', 
                      target_masks=None, 
                      target_areas=None,
-                     target_scalefactors=None):
+                     target_scalefactors=None,
+                     verbose=False):
     bootstrap_areas(fm, basenames, tif_path, hdt, year, new_dts=False)
     fm.reset()
     if mode == 'optimize':
@@ -151,7 +151,8 @@ def simulate_harvest(fm, basenames, year,
         schedule_harvest_areacontrol(fm, 
                                      target_masks=target_masks, 
                                      target_areas=target_areas, 
-                                     target_scalefactors=target_scalefactors)
+                                     target_scalefactors=target_scalefactors,
+                                     verbose=verbose)
     else: # bad mode value
         raise ValueError('Bad mode value')
     sda(fm, basenames, 1, tif_path, hdt, sda_mode=sda_mode)
