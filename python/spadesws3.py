@@ -272,7 +272,8 @@ def compile_basecodes(hdt, basenames, theme_cols):
 def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, param_funcs=None, 
                               target_path='./input/targets.csv', obj_mode='min_harea', mask=None):
     import gurobipy as grb
-    p = gen_scen(fm, basenames, scenario_name, util, param_funcs=param_funcs, toffset=0, obj_mode=obj_mode, mask=mask, target_path=target_path)
+    p = gen_scen(fm, basenames, scenario_name, util, param_funcs=param_funcs, toffset=0, 
+                 obj_mode=obj_mode, mask=mask, target_path=target_path)
     m = p.solve()
     if m.status != grb.GRB.OPTIMAL:
         print('Model not optimal.')
@@ -292,20 +293,22 @@ def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, pa
 
 def schedule_harvest_areacontrol(fm, period=1, acode='harvest', util=0.85, 
                                  target_masks=None, target_areas=None, target_scalefactors=None,
-                                 mask_area_thresh=500.,
-                                 verbose=False):
+                                 mask_area_thresh=0.,
+                                 verbose=0):
     fm.reset_actions()
     if not target_areas:
         if not target_masks: # default to AU-wise THLB 
             au_vals = []
             au_agg = []
-            for au in list(fm.theme_basecodes(2).keys()):
+            for au in fm.theme_basecodes(2):
                 mask = '? 1 %s ?' % au
-                if fm.inventory(0, mask=mask) > mask_area_thresh:
+                masked_area = fm.inventory(0, mask=mask)
+                if masked_area > mask_area_thresh:
                     au_vals.append(au)
                 else:
                     au_agg.append(au)
-                    print('adding to au_agg', mask, fm.inventory(0, mask=mask))
+                    if verbose > 0:
+                        print('adding to au_agg', mask, masked_area)
             if au_agg:
                 fm._themes[2]['areacontrol_au_agg'] = au_agg 
                 au_vals.append('areacontrol_au_agg')
@@ -314,17 +317,18 @@ def schedule_harvest_areacontrol(fm, period=1, acode='harvest', util=0.85,
         #assert False
         target_areas = []
         for i, mask in enumerate(target_masks): # compute area-weighted mean CMAI age for each masked DT set
-            awr = []
-            dt_area = fm.inventory(0, mask=mask)
-            dtype_keys = fm.unmask(mask)
-            for dtk in dtype_keys:
-                dt = fm.dtypes[dtk]
-                area = dt.area(0)
-                cmai_age = dt.ycomp('totvol').mai().ytp().lookup(0)
-                awr.append(area * cmai_age)
-            r = sum(awr)  / fm.inventory(0, mask=mask)
+            masked_area = fm.inventory(0, mask=mask, verbose=verbose)
+            if not masked_area: continue
+            r = sum((fm.dtypes[dtk].ycomp('totvol').mai().ytp().lookup(0) * fm.dtypes[dtk].area(0)) for dtk in fm.unmask(mask))
+            r /= masked_area
+            #awr = []
+            #dtype_keys = fm.unmask(mask)
+            #for dtk in dtype_keys:
+            #    dt = fm.dtypes[dtk]
+            #    awr.append(dt.ycomp('totvol').mai().ytp().lookup(0) * dt.area(0))
+            #r = sum(awr)  / masked_area
             asf = 1. if not target_scalefactors else target_scalefactors[i]  
-            ta = (1/r) * fm.inventory(0, mask=mask) * asf
+            ta = (1/r) * masked_area * asf
             target_areas.append(ta)
     for mask, target_area in zip(target_masks, target_areas):
         if verbose > 0:

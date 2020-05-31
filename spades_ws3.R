@@ -25,6 +25,7 @@ defineModule(sim, list(
     defineParameter("target.masks", "character", NULL, NA, NA, "Target masks (in '? ? ? ?' format). Only applicable if using 'areacontrol' scheduler mode."),
     defineParameter("target.areas", "numermic", NULL, NA, NA, "Target areas (ha).  Only applicable if using 'areacontrol' scheduler mode."),
     defineParameter("target.scalefactors", "numeric", NULL, NA, NA, "Target areas scale factors.  Only applicable if using 'areacontrol' scheduler mode."),
+    defineParameter("mask.area.thresh", "numeric", 0., NA, NA, "Mask area threshold (for aggregation of bootstrapped masks).  Only applicable if using 'areacontrol' scheduler mode."),
     defineParameter("tifPath", 'character', 'tif', NA, NA, desc = 'name of directory with tifs in inputs'),
     defineParameter("yearOfFirstHarvest", 'numeric', start(sim), NA, NA, "year to schedule first harvest"),
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first plot event should occur"),
@@ -158,6 +159,7 @@ applyHarvest <- function(sim) {
                       target_masks = P(sim)$target.masks, 
                       target_areas = P(sim)$target.areas,
                       target_scalefactors = P(sim)$target.scalefactors,
+                      mask_area_thresh = P(sim)$mask.area.thresh,
                       verbose = P(sim)$verbose) 
   sim$landscape$age <- loadAges(sim)
   return(invisible(sim))

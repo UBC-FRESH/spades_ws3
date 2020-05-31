@@ -142,6 +142,7 @@ def simulate_harvest(fm, basenames, year,
                      target_masks=None, 
                      target_areas=None,
                      target_scalefactors=None,
+                     mask_area_thresh=0.,
                      verbose=False):
     bootstrap_areas(fm, basenames, tif_path, hdt, year, new_dts=False)
     fm.reset()
@@ -152,6 +153,7 @@ def simulate_harvest(fm, basenames, year,
                                      target_masks=target_masks, 
                                      target_areas=target_areas, 
                                      target_scalefactors=target_scalefactors,
+                                     mask_area_thresh=mask_area_thresh,
                                      verbose=verbose)
     else: # bad mode value
         raise ValueError('Bad mode value')
