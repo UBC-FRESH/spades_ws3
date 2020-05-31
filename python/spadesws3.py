@@ -291,14 +291,31 @@ def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, pa
 
 
 def schedule_harvest_areacontrol(fm, period=1, acode='harvest', util=0.85, 
-                                 target_masks=None, target_areas=None, target_scalefactors=None, 
+                                 target_masks=None, target_areas=None, target_scalefactors=None,
+                                 mask_area_thresh=500.,
                                  verbose=False):
     fm.reset_actions()
     if not target_areas:
-        target_masks = ['? 1 ? ?'] if not target_masks else target_masks
+        if not target_masks: # default to AU-wise THLB 
+            au_vals = []
+            au_agg = []
+            for au in list(fm.theme_basecodes(2).keys()):
+                mask = '? 1 %s ?' % au
+                if fm.inventory(0, mask=mask) > mask_area_thresh:
+                    au_vals.append(au)
+                else:
+                    au_agg.append(au)
+                    print('adding to au_agg', mask, fm.inventory(0, mask=mask))
+            if au_agg:
+                fm._themes[2]['areacontrol_au_agg'] = au_agg 
+                au_vals.append('areacontrol_au_agg')
+            target_masks = ['? 1 %s ?' % au for au in au_vals]
+        #print(target_masks)
+        #assert False
         target_areas = []
         for i, mask in enumerate(target_masks): # compute area-weighted mean CMAI age for each masked DT set
             awr = []
+            dt_area = fm.inventory(0, mask=mask)
             dtype_keys = fm.unmask(mask)
             for dtk in dtype_keys:
                 dt = fm.dtypes[dtk]
