@@ -126,20 +126,19 @@ def bootstrap_themes(fm, theme_cols=['theme0', 'theme1', 'theme2', 'theme3'],
 
     
 def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
-    #fm.dtypes = {}
-    print('ba basenames', basenames)
+    print('bootstrap_areas', basenames)
     if not year:
-      for bn in basenames:
-          print('copying', '%s/inventory_init.tif' % rst_path(bn), '%s/inventory_%i.tif' % (rst_path(bn), fm.base_year))
-          shutil.copyfile('%s/inventory_init.tif' % rst_path(bn), '%s/inventory_%i.tif' % (rst_path(bn), fm.base_year))
-      year = fm.base_year
+        for bn in basenames:
+            print('copying', '%s/inventory_init.tif' % rst_path(bn), 
+                  '%s/inventory_%i.tif' % (rst_path(bn), fm.base_year))
+            shutil.copyfile('%s/inventory_init.tif' % rst_path(bn), 
+                            '%s/inventory_%i.tif' % (rst_path(bn), fm.base_year))
+        year = fm.base_year
     for dt in fm.dtypes.values(): # yuck
         dt.reset_areas(0)
         dt.reset_areas()
     for bn in basenames:
         _sumarea = 0.
-        #print('bootstrap_areas', bn, year)
-        #print('%s/inventory_%i.tif' % (rst_path(bn), year))
         with rasterio.open('%s/inventory_%i.tif' % (rst_path(bn), year), 'r') as src:
             pxa = pow(src.transform.a, 2) * 0.0001 # pixel area (hectares)
             bh, ba = src.read(1), src.read(2)
@@ -147,12 +146,9 @@ def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
                 ra = ba[np.where(bh == h)] # match themes hash value
                 if new_dts:
                     fm.dtypes[dt] = ws3.forest.DevelopmentType(dt, fm)
-                #else:
-                #    fm.dtypes[dt].reset_areas() 
                 for age in np.unique(ra):
                     area = len(ra[np.where(ra == age)]) * pxa
                     _sumarea += area
-                    #print(bn, dt, age, area)
                     fm.dtypes[dt].area(0, age, area)
         print('bootstrap_areas', bn, year, pxa, _sumarea)
 
@@ -276,7 +272,8 @@ def compile_basecodes(hdt, basenames, theme_cols):
 def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, param_funcs=None, 
                               target_path='./input/targets.csv', obj_mode='min_harea', mask=None):
     import gurobipy as grb
-    p = gen_scen(fm, basenames, scenario_name, util, param_funcs=param_funcs, toffset=0, obj_mode=obj_mode, mask=mask, target_path=target_path)
+    p = gen_scen(fm, basenames, scenario_name, util, param_funcs=param_funcs, toffset=0, 
+                 obj_mode=obj_mode, mask=mask, target_path=target_path)
     m = p.solve()
     if m.status != grb.GRB.OPTIMAL:
         print('Model not optimal.')
@@ -294,28 +291,48 @@ def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, pa
     return sch
 
 
-def schedule_harvest_areacontrol(fm, masks=None, areas=None, period=1, 
-                                 acode='harvest', util=0.85, mask=None, area_scale_factor=1., verbose=False):
-    if not areas:
-        print('areas == False')
-        if not masks: masks = ['? 1 ? ?']
-        areas = []
-        # calculated area-weighted mean CMAI age for each masked DT set
-        for mask in masks:
-            awr = []
-            print('areacontrol mask', mask)
-            dtype_keys = fm.unmask(mask)
-            for dtk in dtype_keys:
-                dt = fm.dtypes[dtk]
-                area = dt.area(0)
-                cmai_age = dt.ycomp('totvol').mai().ytp().lookup(0)
-                awr.append(area * cmai_age)
-            r = sum(awr)  / fm.inventory(0, mask=mask)
-            ta = (1/r) * fm.inventory(0, mask=mask) * area_scale_factor
-            areas.append(ta)
-    print(masks, areas)
-    for mask, target_area in zip(masks, areas):
-        print(mask, target_area)
+def schedule_harvest_areacontrol(fm, period=1, acode='harvest', util=0.85, 
+                                 target_masks=None, target_areas=None, target_scalefactors=None,
+                                 mask_area_thresh=0.,
+                                 verbose=0):
+    fm.reset_actions()
+    if not target_areas:
+        if not target_masks: # default to AU-wise THLB 
+            au_vals = []
+            au_agg = []
+            for au in fm.theme_basecodes(2):
+                mask = '? 1 %s ?' % au
+                masked_area = fm.inventory(0, mask=mask)
+                if masked_area > mask_area_thresh:
+                    au_vals.append(au)
+                else:
+                    au_agg.append(au)
+                    if verbose > 0:
+                        print('adding to au_agg', mask, masked_area)
+            if au_agg:
+                fm._themes[2]['areacontrol_au_agg'] = au_agg 
+                au_vals.append('areacontrol_au_agg')
+            target_masks = ['? 1 %s ?' % au for au in au_vals]
+        #print(target_masks)
+        #assert False
+        target_areas = []
+        for i, mask in enumerate(target_masks): # compute area-weighted mean CMAI age for each masked DT set
+            masked_area = fm.inventory(0, mask=mask, verbose=verbose)
+            if not masked_area: continue
+            r = sum((fm.dtypes[dtk].ycomp('totvol').mai().ytp().lookup(0) * fm.dtypes[dtk].area(0)) for dtk in fm.unmask(mask))
+            r /= masked_area
+            #awr = []
+            #dtype_keys = fm.unmask(mask)
+            #for dtk in dtype_keys:
+            #    dt = fm.dtypes[dtk]
+            #    awr.append(dt.ycomp('totvol').mai().ytp().lookup(0) * dt.area(0))
+            #r = sum(awr)  / masked_area
+            asf = 1. if not target_scalefactors else target_scalefactors[i]  
+            ta = (1/r) * masked_area * asf
+            target_areas.append(ta)
+    for mask, target_area in zip(target_masks, target_areas):
+        if verbose > 0:
+            print('calling areaselector', period, acode, target_area, mask)
         fm.areaselector.operate(period, acode, target_area, mask=mask, verbose=verbose)
     sch = fm.compile_schedule()
     return sch

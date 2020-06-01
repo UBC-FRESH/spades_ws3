@@ -22,9 +22,8 @@ from ws3.spatial import ForestRaster
 from ws3.common import clean_vector_data, reproject_vector_data, rasterize_stands, hash_dt, warp_raster
 ########################################################################################################
 
-print(os.getcwd())
-print(os.sys.path)
-#os.sys.path.insert(0, os.path.abspath('./src'))
+#print(os.getcwd())
+#print(os.sys.path)
 
 import numpy as np
 import pandas as pd
@@ -90,11 +89,7 @@ tvy_name = 'totvol'
 snk_epsg = 3005 # ESPG:3005 corresponds to NAD83/BC Albers
 sns.set_style('dark')
 hdt_path = '%s/hdt' % dat_path
-#coast_bn = ['tsa01', 'tsa02', 'tsa03'] # FIX ME: totally bogus (check GIS data for real coast TSA codes) 
-#_p_slashburn = read_pslashburn('%s/p_slashburn.csv' % dat_path)
-#p_slashburn = lambda bn: _p_slashburn[bn]
-# oe = operability expression
-# ogi = old growth index
+coast_bn = ['tsa01', 'tsa02', 'tsa03'] # FIX ME: totally bogus (check GIS data for real coast TSA codes) 
 oe_harvest = '_age >= 40 and _age <= 999'
 action_params = {'harvest':{'oe':oe_harvest,
                             'mask':('?', '1', '?', '?'),
@@ -111,102 +106,57 @@ cap_age = 900
 
 twopass_cacut_factor = 1.50
 run_sda = True
-#basenames = ['tsa31'] #, 'tsa31']
 
 raster_d = 250
 
-kwargs = []
-if 1:
-    print('basenames', basenames)
-    hdt = {bn:pickle.load(open('%s/hdt_%s.pkl' % (hdt_path, bn), 'rb')) for bn in basenames}
+hdt = {bn:pickle.load(open('%s/hdt_%s.pkl' % (hdt_path, bn), 'rb')) for bn in basenames}
+def kwargs():
     basecodes = compile_basecodes(hdt, basenames, theme_cols)
-    kwargs.append({'basenames':basenames,
-                   'model_name':'foo',
-                   'model_path':dat_path,
-                   'base_year':base_year,
-                   'yld_path':yld_path,
-                   'tif_path':tif_path,
-                   'horizon':horizon,
-                   'period_length':period_length,
-                   'max_age':max_age,
-                   'basecodes':basecodes,
-                   'action_params':action_params,
-                   'hdt':hdt,
-                   'add_null_action':True,
-                   'tvy_name':tvy_name,
-                   'compile_actions':True,
-                   'yields_x_unit':yields_x_unit,
-                   'yields_period_length':yields_period_length,
-                   'verbose':1})
-            
+    kwargs = {'basenames':basenames,
+              'model_name':'foo',
+              'model_path':dat_path,
+              'base_year':base_year,
+              'yld_path':yld_path,
+              'tif_path':tif_path,
+              'horizon':horizon,
+              'period_length':period_length,
+              'max_age':max_age,
+              'basecodes':basecodes,
+              'action_params':action_params,
+              'hdt':hdt,
+              'add_null_action':True,
+              'tvy_name':tvy_name,
+              'compile_actions':True,
+              'yields_x_unit':yields_x_unit,
+              'yields_period_length':yields_period_length,
+              'verbose':1}
+    return kwargs    
 
-    
-else:    
-    for i, bn in enumerate(basenames):
-        hdt = {bn:pickle.load(open('%s/hdt_%s.pkl' % (hdt_path, bn), 'rb'))}
-        kwargs.append({'basenames':[bn],
-                       'model_name':'foo',
-                       'model_path':dat_path,
-                       'base_year':base_year,
-                       'yld_path':yld_path,
-                       'tif_path':tif_path,
-                       'horizon':horizon,
-                       'period_length':period_length,
-                       'max_age':max_age,
-                       'basecodes':compile_basecodes(hdt, [bn], theme_cols),
-                       'action_params':action_params,
-                       'hdt':hdt,
-                       'add_null_action':True,
-                       'tvy_name':tvy_name,
-                       'compile_actions':True,
-                       'yields_x_unit':yields_x_unit,
-                       'yields_period_length':yields_period_length,
-                       'verbose':1})
-
-
-####
-#import ipyparallel as ipp
-#import os
-#import time
-#c = ipp.Client()
-#c[:].use_cloudpickle()
-#v = c.load_balanced_view()
-#v.map(os.chdir, [os.getcwd()]*len(c.ids))
-#amr = v.map_async(lambda kwargs: do_the_thing(**kwargs), kwargs)
-####
 
 def bootstrap_forestmodel_kwargs():
-    return bootstrap_forestmodel(**kwargs[0])
+    return bootstrap_forestmodel(**kwargs())
 
 
 def simulate_harvest(fm, basenames, year, 
                      mode='optimize', 
-                     masks=None, 
-                     areas=None,
-                     area_scale_factor=1.):
-    print('sh basenames', basenames)
+                     target_masks=None, 
+                     target_areas=None,
+                     target_scalefactors=None,
+                     mask_area_thresh=0.,
+                     verbose=False):
     bootstrap_areas(fm, basenames, tif_path, hdt, year, new_dts=False)
-    #assert False
-    #fm.compile_actions()
-    #fm.reset_actions()
-    fm.initialize_areas()
-    #fm.grow()
+    fm.reset()
     if mode == 'optimize':
         schedule_harvest_optimize(fm, basenames, target_path=target_path)
     elif mode == 'areacontrol':
-        schedule_harvest_areacontrol(fm, masks=masks, areas=areas, area_scale_factor=area_scale_factor)
-    else:
-        # bad mode value
+        schedule_harvest_areacontrol(fm, 
+                                     target_masks=target_masks, 
+                                     target_areas=target_areas, 
+                                     target_scalefactors=target_scalefactors,
+                                     mask_area_thresh=mask_area_thresh,
+                                     verbose=verbose)
+    else: # bad mode value
         raise ValueError('Bad mode value')
     sda(fm, basenames, 1, tif_path, hdt, sda_mode=sda_mode)
 
-
-#def bootstrap_forestmodel_from_kwargslist(i=0):
-#    return bootstrap_forestmodel(**kwargs[int(i)])
-
-#def schedule_harvest_kwargslist(fm, i=0):
-#    return schedule_harvest(fm, kwargs[0]['basenames'], target_path=target_path)
-    
-#def run_sda_kwargslist(fm, i=0):
-#    return sda(fm, basenames, 1, kwargs[i]['tif_path'], kwargs[i]['hdt'])
 
