@@ -115,12 +115,12 @@ def kwargs():
     kwargs = {'basenames':basenames,
               'model_name':'foo',
               'model_path':dat_path,
-              'base_year':base_year,
+              'base_year':int(base_year),
               'yld_path':yld_path,
               'tif_path':tif_path,
-              'horizon':horizon,
-              'period_length':period_length,
-              'max_age':max_age,
+              'horizon':int(horizon),
+              'period_length':int(period_length),
+              'max_age':int(max_age),
               'basecodes':basecodes,
               'action_params':action_params,
               'hdt':hdt,
@@ -128,7 +128,7 @@ def kwargs():
               'tvy_name':tvy_name,
               'compile_actions':True,
               'yields_x_unit':yields_x_unit,
-              'yields_period_length':yields_period_length,
+              'yields_period_length':int(yields_period_length),
               'verbose':1}
     return kwargs    
 
