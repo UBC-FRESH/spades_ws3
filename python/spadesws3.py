@@ -52,11 +52,12 @@ def cmp_c_caa(fm, path, expr, acodes, mask=None): # product, named actions
             result[t] = fm.compile_product(t, expr, d['acode'], [d['dtk']], d['age'], coeff=False)
     return result
 
-def _gen_scen_base(fm, basenames, name='base', util=0.85, param_funcs=None, harvest_acode='harvest',  
-                   tvy_name='totvol', toffset=0, obj_mode='max_hvol', target_path='./input/targets.csv',
-                   max_tp=2074, cacut=None, mask=None):
+def _gen_scen_base(fm, basenames, name='base', util=0.85, param_funcs=None, target_scalefactors=None, harvest_acode='harvest', fire_acode='fire', 
+                   tvy_name='totvol', toffset=0, obj_mode='min_harea', target_path='./input/targets.csv',
+                   max_tp=2020, cacut=None, mask=None):
+    fm.foo3 = target_scalefactors
     from functools import partial
-    acodes = ['null', harvest_acode]  
+    acodes = ['null', harvest_acode, fire_acode]  
     vexpr = '%s * %0.2f' % (tvy_name, util)
     if obj_mode == 'max_hvol':
         sense = ws3.opt.SENSE_MAXIMIZE 
@@ -67,9 +68,10 @@ def _gen_scen_base(fm, basenames, name='base', util=0.85, param_funcs=None, harv
     else:
         raise ValueError('Invalid obj_mode: %s' % obj_mode)
     if not param_funcs:
+        target_scalefactors = {bn:1. for bn in basenames} if not target_scalefactors else target_scalefactors
         df_targets = pd.read_csv(target_path).set_index(['tsa', 'year'])
         param_funcs = {}
-        param_funcs['cvcut'] = lambda bn, t: float(df_targets.loc[bn, t]['vcut']) if t <= max_tp else float(df_targets.loc[bn, max_tp]['vcut'])
+        param_funcs['cvcut'] = lambda bn, t: float(df_targets.loc[bn, t]['vcut']) * target_scalefactors[bn] if t <= max_tp else float(df_targets.loc[bn, max_tp]['vcut']) * target_scalefactors[bn]
         param_funcs['cabrn'] = lambda bn, t: float(df_targets.loc[bn, t]['abrn']) if t <= max_tp else float(df_targets.loc[bn, max_tp]['abrn'])
         param_funcs['cflw_acut_e'] = lambda bn, t: df_targets.loc[bn, t]['cflw_acut_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cflw_acut_e']
         param_funcs['cgen_vcut_e'] = lambda bn, t: df_targets.loc[bn, t]['cgen_vcut_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cgen_vcut_e']
@@ -80,23 +82,35 @@ def _gen_scen_base(fm, basenames, name='base', util=0.85, param_funcs=None, harv
                         for bn in basenames})
     coeff_funcs.update({'cvcut_%s' % bn:partial(cmp_c_caa, expr=vexpr, acodes=[harvest_acode], mask=(bn, '?', '?', '?')) 
                         for bn in basenames})
+    if fire_acode:
+        for i in ['0', '1']:
+            coeff_funcs.update({'cabrn-thlb%s_%s' % (i, bn):partial(cmp_c_caa, expr='1.', acodes=[fire_acode], mask=(bn, i, '?', '?')) 
+                                for bn in basenames})
     T = fm.periods# [fm.base_year+(t-1)*fm.period_length for t in fm.periods]
     cflw_e, cgen_data = {}, {}
     #foo = {bn:{t:(bn, t+toffset) for t in T} for bn in basenames}
     #print(T)
     #assert False
-    #cflw_ebn = {bn:({t:param_funcs['cflw_acut_e'](bn, fm.base_year+(t-1)*fm.period_length+toffset) for t in T}, 1) for bn in basenames}
-    #cflw_e.update({'cacut_%s'%bn:cflw_ebn[bn] for bn in basenames})
+    cflw_ebn = {bn:({t:param_funcs['cflw_acut_e'](bn, fm.base_year+(t-1)*fm.period_length+toffset) for t in T}, fm.periods[-1]) for bn in basenames}
+    cflw_e.update({'cacut_%s'%bn:cflw_ebn[bn] for bn in basenames})
     for bn in basenames:
         #print(df_targets.loc[bn])
-        cgen_data.update({'cvcut_%s' % bn:{'lb':{t:param_funcs['cvcut'](bn, fm.base_year+(t-1)*fm.period_length+toffset) *
+        cgen_data.update({'cvcut_%s' % bn:{'lb':{t:param_funcs['cvcut'](bn, fm.base_year+(t-1)*fm.period_length+toffset) * fm.period_length *
                                                  (1. - param_funcs['cgen_vcut_e'](bn, fm.base_year+(t-1)*fm.period_length+toffset))
                                                for t in T}, 
-                                         'ub':{t:param_funcs['cvcut'](bn, fm.base_year+(t-1)*fm.period_length+toffset) for t in T}}})
+                                         'ub':{t:param_funcs['cvcut'](bn, fm.base_year+(t-1)*fm.period_length+toffset) * fm.period_length for t in T}}})
         if cacut:
-            cgen_data.update({'cacut_%s' % bn:{'lb':{t:param_funcs['cacut'](bn, fm.base_year+(t-1)*fm.period_length)*
-                                                   (1. - param_funcs['cgen_acut_e'](bn, fm.base_year+(t-1)*fm.period_length)) for t in T}, 
-                                             'ub':{t:param_funcs['cacut'](bn, fm.base_year+(t-1)*fm.period_length) for t in T}}})
+            cgen_data.update({'cacut_%s' % bn:{'lb':{t:param_funcs['cacut'](bn, fm.base_year+(t-1)*fm.period_length) * fm.period_length *
+                                                     (1. - param_funcs['cgen_acut_e'](bn, fm.base_year+(t-1)*fm.period_length)) for t in T}, 
+                                               'ub':{t:param_funcs['cacut'](bn, fm.base_year+(t-1)*fm.period_length) * fm.period_length for t in T}}})
+        if fire_acode:
+            for i in ['0', '1']:
+                p = fm.inventory(0, mask='? %s ? ?' % i) / fm.inventory(0, mask='? ? ? ?')
+                cgen_data.update({'cabrn-thlb%s_%s' % (i, bn):{'lb':{t:param_funcs['cabrn'](bn, fm.base_year+(t-1)*fm.period_length) * p * fm.period_length *
+                                                                     (1. - param_funcs['cgen_abrn_e'](bn, fm.base_year+(t-1)*fm.period_length)) for t in T}, 
+                                                               'ub':{t:param_funcs['cabrn'](bn, fm.base_year+(t-1)*fm.period_length) * p * fm.period_length for t in T}}})
+                #fm.cgen_data = cgen_data
+                #assert False
     #print(cflw_e)
     fm._tmp = {}
     fm._tmp['param_funcs'] = param_funcs
@@ -104,9 +118,11 @@ def _gen_scen_base(fm, basenames, name='base', util=0.85, param_funcs=None, harv
     return fm.add_problem(name, coeff_funcs, cflw_e, cgen_data=cgen_data, acodes=acodes, sense=sense, mask=mask)
 
 
-def gen_scen(fm, basenames, name, util, param_funcs, toffset=0, obj_mode='max_hvol', cacut=None, mask=None, target_path='./input/targets.csv'):
+def gen_scen(fm, basenames, name, util, param_funcs, target_scalefactors=None, toffset=0, obj_mode='min_harea', cacut=None, mask=None, target_path='./input/targets.csv'):
+    fm.foo2 = target_scalefactors
+
     dsp = {'base':_gen_scen_base}
-    return dsp[name](fm, basenames, name, util, param_funcs=param_funcs, toffset=toffset, obj_mode=obj_mode, cacut=cacut, mask=mask, target_path=target_path)
+    return dsp[name](fm, basenames, name, util, param_funcs=param_funcs, target_scalefactors=target_scalefactors, toffset=toffset, obj_mode=obj_mode, cacut=cacut, mask=mask, target_path=target_path)
 
 
 def unhash_ij(problem):
@@ -124,8 +140,10 @@ def bootstrap_themes(fm, theme_cols=['theme0', 'theme1', 'theme2', 'theme3'],
         fm.add_theme(t, basecodes=basecodes[ti], aggs=aggs[ti])
     fm.nthemes = len(theme_cols)
 
-    
-def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
+
+def bootstrap_areas(fm, basenames, rst_path, yld_path, hdt, year=None, new_dts=True):
+    #print('xxxxx', type(yld_path))
+    #au_table = pd.read_csv('%s/au_table.csv' % yld_path).set_index('au_id')
     print('bootstrap_areas', basenames)
     if not year:
         for bn in basenames:
@@ -143,6 +161,7 @@ def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
             pxa = pow(src.transform.a, 2) * 0.0001 # pixel area (hectares)
             bh, ba = src.read(1), src.read(2)
             for h, dt in hdt[bn].items():
+                #dt = (dt[0], dt[1], dt[2], 's%04d' % int(au_table.loc[int(dt[2])].canfi_species))
                 ra = ba[np.where(bh == h)] # match themes hash value
                 if new_dts:
                     fm.dtypes[dt] = ws3.forest.DevelopmentType(dt, fm)
@@ -152,33 +171,69 @@ def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
                     fm.dtypes[dt].area(0, age, area)
         print('bootstrap_areas', bn, year, pxa, _sumarea)
 
-                    
-def bootstrap_yields(fm, yld_path, theme_cols=['AU', 'LDSPP'], spcode='SPCode', 
-                     startp_col='Wdks', x_max=360, y_cols=None, 
-                     period_length=10, x_unit='periods', tvy_name='totvol'):
-    y_cols = ['X%i' % i for i in range(0, x_max, period_length)]
-    df = pd.read_csv(yld_path, usecols=theme_cols+[spcode, startp_col]+y_cols)
-    df [theme_cols[1]] = df[theme_cols[1]].str.lower().str.replace(r'[- ]+', '_')
-    for i in (0, 1): df[theme_cols[i]] = df[theme_cols[i]].astype(str)
-    df = df.set_index(theme_cols)
-    x_factor = 1 if x_unit == 'periods' else period_length
-    period_length = period_length if x_unit == 'periods' else 1
-    for t1, t2 in df.index.values: # assuming exactly one yield curve per unique combination of AU and LDSPP
-        mask = ('?', '?', t1, t2)
-        dt_keys = fm.unmask(mask)
-        if not dt_keys: continue
-        r = df.loc[t1, t2]
-        yname = str.lower(r[spcode])
-        points = [((x+r[startp_col])*x_factor, r[y]) for x, y in enumerate(y_cols)]
-        c = fm.register_curve(ws3.core.Curve(yname, points=points, type='a', is_volume=True, xmax=fm.max_age, period_length=period_length))
-        fm.yields.append((mask, 'a', [(yname, c)]))
-        fm.ynames.add(yname)
-        for dtk in dt_keys: fm.dtypes[dtk].add_ycomp('a', yname, c)
+def bootstrap_yields(fm, yld_path, spcode='canfi_species', 
+                     x_max=350, period_length=10., tvy_name='totvol', x_unit='years'):
+    #print('yyy', yld_path)
+    au_table = pd.read_csv('%s/au_table.csv' % yld_path).set_index('au_id')
+    curve_table = pd.read_csv('%s/curve_table.csv' % yld_path)
+    curve_points_table = pd.read_csv('%s/curve_points_table.csv' % yld_path).set_index('curve_id')
+    print(au_table.shape)
+    #return au_table
+    for au_id, au_row in au_table.iterrows():
+        #print()
+        #species_code = _canfi_map[au_row.canfi_species]
+        #yname = 'spcvol_%s' % species_code
+        yname = 's%04d' % int(au_row.canfi_species)
+        print()
+        print(au_id, yname)
+        #for is_managed in (0, 1):
+        for is_managed in [0]:
+            curve_id = au_row.unmanaged_curve_id if not is_managed else au_row.managed_curve_id
+            mask = ('?', '?', str(curve_id), '?')
+            #print(au_id, is_managed, curve_id, mask)
+            dt_keys = fm.unmask(mask)
+            if not dt_keys: continue
+            points = [(r.x, r.y) for _, r in curve_points_table.loc[curve_id].iterrows() if not r.x % period_length and r.x <= x_max]
+            c = fm.register_curve(ws3.core.Curve(yname, points=points, type='a', is_volume=True, xmax=fm.max_age, period_length=period_length))
+            #print()
+            fm.yields.append((mask, 'a', [(yname, c)]))
+            fm.ynames.add(yname)
+            for dtk in dt_keys: 
+                print(au_id, is_managed, curve_id, mask, yname, dtk)
+                fm.dtypes[dtk].add_ycomp('a', yname, c)
     # add total volume curve ###
     expr = '_SUM(%s)' % ', '.join(fm.ynames)
     fm.yields.append((('?', '?', '?', '?'), 'c', [(tvy_name, expr)]))
     fm.ynames.add(tvy_name)
-    for dtk in fm.dtypes.keys(): fm.dtypes[dtk].add_ycomp('c', tvy_name, expr)
+    for dtk in fm.dtypes.keys(): fm.dtypes[dtk].add_ycomp('c', tvy_name, expr)  
+
+if 0:                    
+    def bootstrap_yields(fm, yld_path, theme_cols=['AU', 'LDSPP'], spcode='SPCode', 
+                         startp_col='Wdks', x_max=360, y_cols=None, 
+                         period_length=10, x_unit='periods', tvy_name='totvol'):
+        y_cols = ['X%i' % i for i in range(0, x_max, period_length)]
+        df = pd.read_csv(yld_path, usecols=theme_cols+[spcode, startp_col]+y_cols)
+        df [theme_cols[1]] = df[theme_cols[1]].str.lower().str.replace(r'[- ]+', '_')
+        for i in (0, 1): df[theme_cols[i]] = df[theme_cols[i]].astype(str)
+        df = df.set_index(theme_cols)
+        x_factor = 1 if x_unit == 'periods' else period_length
+        period_length = period_length if x_unit == 'periods' else 1
+        for t1, t2 in df.index.values: # assuming exactly one yield curve per unique combination of AU and LDSPP
+            mask = ('?', '?', t1, t2)
+            dt_keys = fm.unmask(mask)
+            if not dt_keys: continue
+            r = df.loc[t1, t2]
+            yname = str.lower(r[spcode])
+            points = [((x+r[startp_col])*x_factor, r[y]) for x, y in enumerate(y_cols)]
+            c = fm.register_curve(ws3.core.Curve(yname, points=points, type='a', is_volume=True, xmax=fm.max_age, period_length=period_length))
+            fm.yields.append((mask, 'a', [(yname, c)]))
+            fm.ynames.add(yname)
+            for dtk in dt_keys: fm.dtypes[dtk].add_ycomp('a', yname, c)
+        # add total volume curve ###
+        expr = '_SUM(%s)' % ', '.join(fm.ynames)
+        fm.yields.append((('?', '?', '?', '?'), 'c', [(tvy_name, expr)]))
+        fm.ynames.add(tvy_name)
+        for dtk in fm.dtypes.keys(): fm.dtypes[dtk].add_ycomp('c', tvy_name, expr)
 
 
 def bootstrap_actions(fm, action_params):
@@ -210,7 +265,8 @@ def bootstrap_forestmodel(basenames, model_name, model_path, base_year, yld_path
                      period_length=period_length,
                      max_age=max_age)
     bootstrap_themes(fm, basecodes=basecodes)    
-    bootstrap_areas(fm, basenames, tif_path, hdt)
+    #print('xxx', yld_path)
+    bootstrap_areas(fm, basenames, tif_path, yld_path, hdt)
     bootstrap_yields(fm, yld_path, tvy_name=tvy_name, period_length=yields_period_length, x_unit=yields_x_unit)
     bootstrap_actions(fm, action_params)
     if add_null_action: fm.add_null_action()
@@ -269,10 +325,11 @@ def compile_basecodes(hdt, basenames, theme_cols):
     return basecodes
 
 
-def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, param_funcs=None, 
+def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, target_scalefactors=None, param_funcs=None, 
                               target_path='./input/targets.csv', obj_mode='min_harea', mask=None):
     import gurobipy as grb
-    p = gen_scen(fm, basenames, scenario_name, util, param_funcs=param_funcs, toffset=0, 
+    #fm.foo1 = target_scalefactors
+    p = gen_scen(fm, basenames, scenario_name, util, target_scalefactors=target_scalefactors, param_funcs=param_funcs, toffset=0, 
                  obj_mode=obj_mode, mask=mask, target_path=target_path)
     m = p.solve()
     if m.status != grb.GRB.OPTIMAL:
@@ -366,7 +423,7 @@ def sda(fm, basenames, time_step, tif_path, hdt, acode_map=None, nthresh=10, sda
         print('SDA for TSA', bn)
         mask = (bn, '?', '?', '?')
         fr = ForestRaster(**cmp_fr_kwargs(bn))
-        fr.allocate_schedule(mask=mask, verbose=1, sda_mode=sda_mode, nthresh=nthresh)
+        fr.allocate_schedule(mask=mask, verbose=0, sda_mode=sda_mode, nthresh=nthresh)
         fr.cleanup()
 
 

@@ -76,6 +76,7 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
 ## event functions
 
 Init <- function(sim) {
+    #browser()
     library(R.utils)
     if (is.null(P(sim)$basenames)) stop(paste("'basenames' parameter value not specified in", currentModule(sim)))
     cmp <- grep(pattern = paste0(currentModule(sim), "$"), x = list.files(modulePath(sim))) %>%
@@ -115,6 +116,7 @@ updateAges <- function(sim, offset = 0) {
                                           P(sim)$tifPath,
                                           bn,
                                           paste("inventory_", toString(year+offset), ".tif", sep="")))
+  #browser()
   rs.list <- sapply(files1, stack) # one stack per MU
   rs.list <- rapply(rs.list, 
                     function(rs) {

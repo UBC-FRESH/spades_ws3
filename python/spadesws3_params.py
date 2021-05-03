@@ -55,8 +55,8 @@ scenario_name = 'base'
 sda_mode = 'randblk' # 'randpxl'
 obj_mode = 'min_harea' # 'max_harea'
 horizon = 2
-period_length = 1
-yields_period_length = 10
+period_length = 10
+yields_period_length = 1
 yields_x_unit = 'years'
 time_step = 1
 max_age = 1000
@@ -65,7 +65,7 @@ try:
 except:
     dat_path = '../../../input'
 target_path = join(dat_path, 'targets.csv')
-yld_path = '%s/yld.csv' % dat_path
+yld_path = dat_path # '%s/yld.csv' % dat_path
 tolerance = 10.
 clean_inv = False
 rasterize_inv = False
@@ -91,9 +91,14 @@ sns.set_style('dark')
 hdt_path = '%s/hdt' % dat_path
 coast_bn = ['tsa01', 'tsa02', 'tsa03'] # FIX ME: totally bogus (check GIS data for real coast TSA codes) 
 oe_harvest = '_age >= 40 and _age <= 999'
+oe_fire = '_age >= 10 and _age <= 999'
 action_params = {'harvest':{'oe':oe_harvest,
                             'mask':('?', '1', '?', '?'),
                             'is_harvest':True,
+                            'targetage':0},
+                 'fire':{'oe':oe_fire,
+                            'mask':('?', '?', '?', '?'),
+                            'is_harvest':False,
                             'targetage':0}}
 util = 0.85
 
@@ -144,10 +149,10 @@ def simulate_harvest(fm, basenames, year,
                      target_scalefactors=None,
                      mask_area_thresh=0.,
                      verbose=False):
-    bootstrap_areas(fm, basenames, tif_path, hdt, year, new_dts=False)
+    bootstrap_areas(fm, basenames, tif_path, yld_path, hdt, year, new_dts=False)
     fm.reset()
     if mode == 'optimize':
-        schedule_harvest_optimize(fm, basenames, target_path=target_path)
+        schedule_harvest_optimize(fm, basenames, target_scalefactors=target_scalefactors, target_path=target_path, util=util)
     elif mode == 'areacontrol':
         schedule_harvest_areacontrol(fm, 
                                      target_masks=target_masks, 
@@ -157,6 +162,5 @@ def simulate_harvest(fm, basenames, year,
                                      verbose=verbose)
     else: # bad mode value
         raise ValueError('Bad mode value')
-    sda(fm, basenames, 1, tif_path, hdt, sda_mode=sda_mode)
-
-
+    acode_map = {acode:'projected_%s' % acode for acode in fm.actions.keys() if acode not in ['null']}
+    sda(fm, basenames, 1, tif_path, hdt, sda_mode=sda_mode, acode_map=acode_map)
