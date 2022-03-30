@@ -22,6 +22,8 @@ defineModule(sim, list(
     defineParameter("horizon", "numeric", 1L, NA, NA, "ws3 simulation horizon (periods)"),
     defineParameter("base.year", "numeric", 2015L, NA, NA, "ws3 simulation base year"),
     defineParameter("scheduler.mode", "character", "optimize", NA, NA, "Switch between 'optimize' and 'areacontrol' harvest scheduler modes"),
+    defineParameter("scenario.name", "character", "base", NA, NA, "Name of scenario to run in harvest scheduler"),
+    defineParameter("cbird", "numeric", NULL, NA, NA, "cbird parameter for scaling intermediate bird scenarios"),
     defineParameter("target.masks", "character", NULL, NA, NA, "Target masks (in '? ? ? ?' format). Only applicable if using 'areacontrol' scheduler mode."),
     defineParameter("target.areas", "numermic", NULL, NA, NA, "Target areas (ha).  Only applicable if using 'areacontrol' scheduler mode."),
     defineParameter("target.scalefactors", "numeric", NULL, NA, NA, "Target areas scale factors.  Only applicable if using 'areacontrol' scheduler mode."),
@@ -35,6 +37,7 @@ defineModule(sim, list(
     defineParameter(".useCache", "logical", FALSE, NA, NA, "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant")
   ),
   inputObjects = bind_rows(
+      
     expectsInput(objectName = "landscape", objectClass = "RasterStack", desc = "stand age", sourceURL = NA)
   ),
   outputObjects = bind_rows(
@@ -61,10 +64,12 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
     },
     harvest = {
       sim <- applyHarvest(sim)
+      #browser()
       sim <- scheduleEvent(sim, time(sim) + 1, "spades_ws3", "harvest")
     },
     grow = {
       sim <- applyGrow(sim)
+      #browser()
       sim <- scheduleEvent(sim, time(sim) + 1, "spades_ws3", "grow")
     },
     warning(paste("Undefined event type: '", current(sim)[1, "eventType", with = FALSE],
@@ -155,7 +160,9 @@ applyHarvest <- function(sim) {
   sim$fm$base_year <- year
   updateAges(sim)
   py$simulate_harvest(fm = sim$fm, 
-                      basenames = P(sim)$basenames, 
+                      basenames = P(sim)$basenames,
+                      scenario_name = P(sim)$scenario.name,
+                      cbird = P(sim)$cbird,
                       year = year, 
                       mode = P(sim)$scheduler.mode, 
                       target_masks = P(sim)$target.masks, 

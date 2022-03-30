@@ -19,7 +19,8 @@ import sys
 import ws3
 from ws3.forest import ForestModel, Action
 from ws3.spatial import ForestRaster
-from ws3.common import clean_vector_data, reproject_vector_data, rasterize_stands, hash_dt, warp_raster
+#from ws3.common import clean_vector_data, reproject_vector_data, rasterize_stands, hash_dt, warp_raster
+from ws3.common import clean_vector_data, reproject_vector_data, hash_dt, warp_raster
 ########################################################################################################
 
 #print(os.getcwd())
@@ -56,7 +57,7 @@ sda_mode = 'randblk' # 'randpxl'
 obj_mode = 'min_harea' # 'max_harea'
 horizon = 2
 period_length = 10
-yields_period_length = 1
+yields_period_length = 10
 yields_x_unit = 'years'
 time_step = 1
 max_age = 1000
@@ -65,33 +66,32 @@ try:
 except:
     dat_path = '../../../input'
 target_path = join(dat_path, 'targets.csv')
-yld_path = dat_path # '%s/yld.csv' % dat_path
+#yld_path = dat_path # '%s/yld.csv' % dat_path
 tolerance = 10.
 clean_inv = False
 rasterize_inv = False
-gdb_path = lambda bn: '%s/gis/gdb/%s.gdb' % (dat_path, bn)
 shp_path = lambda bn: '%s/gis/shp/%s.shp' % (dat_path, bn)
 tif_path = lambda bn: '%s/tif/%s' % (dat_path, bn)
+yld_path = '%s/yld' % dat_path
 shp_name = 'stands'
 age_col = 'age'
-theme_cols = ['theme0', 'theme1', 'theme2', 'theme3']
+theme_cols = ['fma', 'thlb', 'ygrp', 'bcov']
 compress = 'lzw'
 dtype = rasterio.uint8
 base_year = 2015
-prop_names = [u'THLB', u'AU', u'LdSpp', u'Age2015', u'Shape_Area']
-prop_types = [(u'theme0', 'str:10'),
+prop_names = [u'fma', u'thlb', u'ygrp', u'bcov', u'stAge', u'area_ha_pl']
+prop_types = [(u'theme0', 'str:5'),
               (u'theme1', 'str:1'),
-              (u'theme2', 'str:5'), 
-              (u'theme3', 'str:50'), 
+              (u'theme2', 'str:20'), 
+              (u'theme3', 'str:5'), 
               (u'age', 'int:5'), 
               (u'area', 'float:10.1')]
 tvy_name = 'totvol'
 snk_epsg = 3005 # ESPG:3005 corresponds to NAD83/BC Albers
 sns.set_style('dark')
 hdt_path = '%s/hdt' % dat_path
-coast_bn = ['tsa01', 'tsa02', 'tsa03'] # FIX ME: totally bogus (check GIS data for real coast TSA codes) 
 oe_harvest = '_age >= 40 and _age <= 999'
-oe_fire = '_age >= 10 and _age <= 999'
+oe_fire = '_age >= 100 and _age <= 999'
 action_params = {'harvest':{'oe':oe_harvest,
                             'mask':('?', '1', '?', '?'),
                             'is_harvest':True,
@@ -112,9 +112,13 @@ cap_age = 900
 twopass_cacut_factor = 1.50
 run_sda = True
 
-raster_d = 250
+raster_d = 90
 
-hdt = {bn:pickle.load(open('%s/hdt_%s.pkl' % (hdt_path, bn), 'rb')) for bn in basenames}
+try:
+    hdt = {bn:pickle.load(open('%s/hdt_%s.pkl' % (hdt_path, bn), 'rb')) for bn in basenames}
+except:
+    hdt = {}
+    
 def kwargs():
     basecodes = compile_basecodes(hdt, basenames, theme_cols)
     kwargs = {'basenames':basenames,
@@ -142,8 +146,10 @@ def bootstrap_forestmodel_kwargs():
     return bootstrap_forestmodel(**kwargs())
 
 
-def simulate_harvest(fm, basenames, year, 
-                     mode='optimize', 
+def simulate_harvest(fm, basenames, year,
+                     mode='optimize',
+                     scenario_name='base',
+                     cbird=None,
                      target_masks=None, 
                      target_areas=None,
                      target_scalefactors=None,
@@ -151,8 +157,9 @@ def simulate_harvest(fm, basenames, year,
                      verbose=False):
     bootstrap_areas(fm, basenames, tif_path, yld_path, hdt, year, new_dts=False)
     fm.reset()
+    print('cbird1', cbird)
     if mode == 'optimize':
-        schedule_harvest_optimize(fm, basenames, target_scalefactors=target_scalefactors, target_path=target_path, util=util)
+        schedule_harvest_optimize(fm, basenames, scenario_name=scenario_name, target_scalefactors=target_scalefactors, target_path=target_path, util=util, cbird=cbird)
     elif mode == 'areacontrol':
         schedule_harvest_areacontrol(fm, 
                                      target_masks=target_masks, 
