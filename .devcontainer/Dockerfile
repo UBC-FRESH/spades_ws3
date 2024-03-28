@@ -1,13 +1,22 @@
-FROM jupyter/r-notebook:ubuntu-22.04
+# Pre-built Dev Container Image for R. More info: https://github.com/rocker-org/devcontainer-images/pkgs/container/devcontainer%2Ftidyverse
+# Available R version: 4, 4.1, 4.0
+ARG VARIANT="4"
+FROM ghcr.io/rocker-org/devcontainer/tidyverse:${VARIANT}
 
-USER root
+RUN install2.r --error --skipinstalled -n -1 \
+        patchwork \
+        paletteer \
+        here \
+        janitor \
+        palmerpenguins \
+        markdown \
+        httpgd \ 
+        languageserver \
+        lintr \
+        bench \
+    && rm -rf /tmp/downloaded_packages \
+    && R -q -e 'remotes::install_github("https://github.com/dcomtois/summarytools/tree/0-8-9")'
 
-RUN apt-get update && \
-    apt-get install -y gdebi-core && \
-    wget https://download2.rstudio.org/server/jammy/amd64/rstudio-server-2023.09.1-494-amd64.deb && \
-    gdebi -n rstudio-server-2023.09.1-494-amd64.deb && \
-    rm rstudio-server-2023.09.1-494-amd64.deb
-
-USER ${NB_UID}
-
-RUN pip install --no-cache-dir jupyter-rsession-proxy==2.1.0
+# Install Python packages
+COPY requirements.txt /tmp/pip-tmp/
+RUN python3 -m pip --disable-pip-version-check --no-cache-dir install -r /tmp/pip-tmp/requirements.txt
