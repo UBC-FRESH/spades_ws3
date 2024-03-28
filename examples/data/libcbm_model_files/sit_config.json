@@ -1,0 +1,79 @@
+{
+    "import_config": {
+        "age_classes": {
+            "params": {
+                "path": "sit_age_classes.csv"
+            },
+            "type": "csv"
+        },
+        "classifiers": {
+            "params": {
+                "path": "sit_classifiers.csv"
+            },
+            "type": "csv"
+        },
+        "disturbance_types": {
+            "params": {
+                "path": "sit_disturbance_types.csv"
+            },
+            "type": "csv"
+        },
+        "events": {
+            "params": {
+                "path": "sit_events.csv"
+            },
+            "type": "csv"
+        },
+        "inventory": {
+            "params": {
+                "path": "sit_inventory.csv"
+            },
+            "type": "csv"
+        },
+        "transitions": {
+            "params": {
+                "path": "sit_transitions.csv"
+            },
+            "type": "csv"
+        },
+        "yield": {
+            "params": {
+                "path": "sit_yield.csv"
+            },
+            "type": "csv"
+        }
+    },
+    "mapping_config": {
+        "disturbance_types": {
+            "disturbance_type_mapping": [
+                {
+                    "default_dist_type": "Clearcut harvesting without salvage",
+                    "user_dist_type": "harvest"
+                },
+                {
+                    "default_dist_type": "Wildfire",
+                    "user_dist_type": "fire"
+                }
+            ]
+        },
+        "nonforest": null,
+        "spatial_units": {
+            "admin_boundary": "British Columbia",
+            "eco_boundary": "Montane Cordillera",
+            "mapping_mode": "SingleDefaultSpatialUnit"
+        },
+        "species": {
+            "species_classifier": "species",
+            "species_mapping": [
+                {
+                    "default_species": "Softwood forest type",
+                    "user_species": "softwood"
+                },
+                {
+                    "default_species": "Hardwood forest type",
+                    "user_species": "hardwood"
+                }
+            ]
+        }
+    }
+}
