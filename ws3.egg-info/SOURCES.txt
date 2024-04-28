@@ -1,0 +1,7 @@
+LICENSE
+README.md
+ws3.egg-info/PKG-INFO
+ws3.egg-info/SOURCES.txt
+ws3.egg-info/dependency_links.txt
+ws3.egg-info/requires.txt
+ws3.egg-info/top_level.txt

@@ -1,0 +1,24 @@
+Metadata-Version: 2.1
+Name: ws3
+Version: 0.0.1.post3
+Summary: Wood Supply Simulation System
+Home-page: http://github.com/gparadis/ws3
+Author: Gregory Paradis
+Author-email: 0@01101.io
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: scipy
+Requires-Dist: pandas
+Requires-Dist: numpy
+Requires-Dist: matplotlib
+Requires-Dist: rasterio
+Requires-Dist: fiona
+Requires-Dist: profilehooks
+
+# spades_ws3
+
+Wraps the ws3 Python package to behave like a SpaDES module. 

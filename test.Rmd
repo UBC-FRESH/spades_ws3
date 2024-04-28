@@ -1,0 +1,48 @@
+
+```{r}
+delfiles <- dir(path="data" ,pattern="*.tif")
+file.remove(file.path("data", delfiles)) 
+```
+
+```{r module_usage}
+library(SpaDES.core)
+library(reticulate)
+library(tuple)
+
+setPaths(modulePath = "modules")
+getPaths() # shows where the 4 relevant paths are
+
+times <- list(start = 0, end = 2)
+    
+
+parameters <- list(
+  spades_ws3 = list(
+    verbose = 99,
+    horizon = 2,
+    period.length = 1,
+    base.year = 2020,
+    model.name = "tsa24_clipped",
+    model.path = "examples/data/woodstock_model_files",
+    shp.path = "examples/data/shp/tsa24_clipped/stands.shp",
+    tif.path = getPaths()$rasterPath,
+    theme.cols = c("theme0", "theme1", "theme2", "theme3", "theme4"),
+    scheduler.mode = "heuristic",
+    scheduler.targets = list(list(mask = "? ? ? ? ?", 
+                                  acode = "harvest", 
+                                  target_area = 10)),
+    action.decode = list(fire = 1)
+  )
+#.progress = list(type = "text", interval = 1), # for a progress bar
+  ## If there are further modules, each can have its own set of parameters:
+  #module1 = list(param1 = value1, param2 = value2),
+  #module2 = list(param1 = value1, param2 = value2)
+)
+modules <- list("spades_ws3")
+objects <- list()
+inputs <- list()
+outputs <- list()
+
+mySim <- simInit(times = times, params = parameters, modules = modules, objects = objects)
+
+mySimOut <- spades(mySim)
+```
