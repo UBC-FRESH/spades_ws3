@@ -122,7 +122,7 @@ def bootstrap_themes(fm, theme_cols=['theme0', 'theme1', 'theme2', 'theme3'],
                      basecodes=[[], [], [], []], aggs=[{}, {}, {}, {}], verbose=False):
     for ti, t in enumerate(theme_cols):
         fm.add_theme(t, basecodes=basecodes[ti], aggs=aggs[ti])
-    fm.nthemes = len(theme_cols)
+    #fm.nthemes = len(theme_cols)
 
     
 def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
@@ -152,8 +152,43 @@ def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
                     fm.dtypes[dt].area(0, age, area)
         print('bootstrap_areas', bn, year, pxa, _sumarea)
 
+def bootstrap_yields(fm, yld_path, spcode='canfi_species', 
+                     x_max=350, period_length=10., tvy_name='totvol', x_unit='years'):
+    #print('yyy', yld_path)
+    au_table = pd.read_csv('%s/au_table.csv' % yld_path).set_index('au_id')
+    curve_table = pd.read_csv('%s/curve_table.csv' % yld_path)
+    curve_points_table = pd.read_csv('%s/curve_points_table.csv' % yld_path).set_index('curve_id')
+    print(au_table.shape)
+    #return au_table
+    for au_id, au_row in au_table.iterrows():
+        #print()
+        #species_code = _canfi_map[au_row.canfi_species]
+        #yname = 'spcvol_%s' % species_code
+        yname = 's%04d' % int(au_row.canfi_species)
+        print()
+        print(au_id, yname)
+        #for is_managed in (0, 1):
+        for is_managed in [0]:
+            curve_id = au_row.unmanaged_curve_id if not is_managed else au_row.managed_curve_id
+            mask = ('?', '?', str(curve_id), '?')
+            #print(au_id, is_managed, curve_id, mask)
+            dt_keys = fm.unmask(mask)
+            if not dt_keys: continue
+            points = [(r.x, r.y) for _, r in curve_points_table.loc[curve_id].iterrows() if not r.x % period_length and r.x <= x_max]
+            c = fm.register_curve(ws3.core.Curve(yname, points=points, type='a', is_volume=True, xmax=fm.max_age, period_length=period_length))
+            #print()
+            fm.yields.append((mask, 'a', [(yname, c)]))
+            fm.ynames.add(yname)
+            for dtk in dt_keys: 
+                print(au_id, is_managed, curve_id, mask, yname, dtk)
+                fm.dtypes[dtk].add_ycomp('a', yname, c)
+    # add total volume curve ###
+    expr = '_SUM(%s)' % ', '.join(fm.ynames)
+    fm.yields.append((('?', '?', '?', '?'), 'c', [(tvy_name, expr)]))
+    fm.ynames.add(tvy_name)
+    for dtk in fm.dtypes.keys(): fm.dtypes[dtk].add_ycomp('c', tvy_name, expr)
                     
-def bootstrap_yields(fm, yld_path, theme_cols=['AU', 'LDSPP'], spcode='SPCode', 
+def bootstrap_yields_(fm, yld_path, theme_cols=['AU', 'LDSPP'], spcode='SPCode', 
                      startp_col='Wdks', x_max=360, y_cols=None, 
                      period_length=10, x_unit='periods', tvy_name='totvol'):
     y_cols = ['X%i' % i for i in range(0, x_max, period_length)]
@@ -271,13 +306,13 @@ def compile_basecodes(hdt, basenames, theme_cols):
 
 def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, param_funcs=None, 
                               target_path='./input/targets.csv', obj_mode='min_harea', mask=None):
-    import gurobipy as grb
+    #import gurobipy as grb
     p = gen_scen(fm, basenames, scenario_name, util, param_funcs=param_funcs, toffset=0, 
                  obj_mode=obj_mode, mask=mask, target_path=target_path)
     m = p.solve()
-    if m.status != grb.GRB.OPTIMAL:
-        print('Model not optimal.')
-        return None
+    #if m.status != grb.GRB.OPTIMAL:
+    #    print('Model not optimal.')
+    #    return None
     sch = fm.compile_schedule(p)
     fm.reset_actions()
     fm.initialize_areas()
@@ -315,7 +350,9 @@ def schedule_harvest_areacontrol(fm, period=1, acode='harvest', util=0.85,
             target_masks = ['? 1 %s ?' % au for au in au_vals]
         #print(target_masks)
         #assert False
-        target_areas = []
+      
+        target_areas = [] # TO DO: remove target_areas function arg (not needed)
+
         for i, mask in enumerate(target_masks): # compute area-weighted mean CMAI age for each masked DT set
             masked_area = fm.inventory(0, mask=mask, verbose=verbose)
             if not masked_area: continue

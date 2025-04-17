@@ -23,7 +23,7 @@ defineModule(sim, list(
     defineParameter("base.year", "numeric", 2015L, NA, NA, "ws3 simulation base year"),
     defineParameter("scheduler.mode", "character", "optimize", NA, NA, "Switch between 'optimize' and 'areacontrol' harvest scheduler modes"),
     defineParameter("target.masks", "character", NULL, NA, NA, "Target masks (in '? ? ? ?' format). Only applicable if using 'areacontrol' scheduler mode."),
-    defineParameter("target.areas", "numermic", NULL, NA, NA, "Target areas (ha).  Only applicable if using 'areacontrol' scheduler mode."),
+    #defineParameter("target.areas", "numermic", NULL, NA, NA, "Target areas (ha).  Only applicable if using 'areacontrol' scheduler mode."),
     defineParameter("target.scalefactors", "numeric", NULL, NA, NA, "Target areas scale factors.  Only applicable if using 'areacontrol' scheduler mode."),
     defineParameter("mask.area.thresh", "numeric", 0., NA, NA, "Mask area threshold (for aggregation of bootstrapped masks).  Only applicable if using 'areacontrol' scheduler mode."),
     defineParameter("tifPath", 'character', 'tif', NA, NA, desc = 'name of directory with tifs in inputs'),
@@ -80,8 +80,8 @@ Init <- function(sim) {
     if (is.null(P(sim)$basenames)) stop(paste("'basenames' parameter value not specified in", currentModule(sim)))
     cmp <- grep(pattern = paste0(currentModule(sim), "$"), x = list.files(modulePath(sim))) %>%
            list.files(path = modulePath(sim), full.names = TRUE)[.] # current module path
-    py$sys$path <- insert(py$sys$path, 1, file.path(cmp, "python"))
-    py$sys$path <- insert(py$sys$path, 1, file.path(cmp, "python", "ws3"))
+    #py$sys$path <- insert(py$sys$path, 1, file.path(cmp, "python"))
+    #py$sys$path <- insert(py$sys$path, 1, file.path(cmp, "python", "ws3"))
     py$basenames <- P(sim)$basenames
     py_run_file(file.path(cmp, "python", "spadesws3_params.py"))
     py$base_year <- P(sim)$base.year
@@ -115,12 +115,39 @@ updateAges <- function(sim, offset = 0) {
                                           P(sim)$tifPath,
                                           bn,
                                           paste("inventory_", toString(year+offset), ".tif", sep="")))
-  rs.list <- sapply(files1, stack) # one stack per MU
-  rs.list <- rapply(rs.list, 
-                    function(rs) {
-                    rs[[2]] <- crop(sim$landscape$age, rs[[2]]) %>% mask(., rs[[2]])
-                    rs[[2]][is.nan(rs[[2]])] <- NA
-                    return(rs)})
+  #rs.list <- sapply(files1, stack) # one stack per MU
+  #rs.list <- lapply(files1, function(f) stack(f)[])  # Load stack and copy all values to memory
+  #rs.list <- lapply(files1, function(f) {
+  #  raster::stack(f) %>% raster::stack()  # force re-stack to drop filename reference
+  #})
+  #rs.list <- lapply(files1, function(f) {
+  #  s <- raster::stack(f)
+  #  raster::stack(lapply(1:nlayers(s), function(i) raster::raster(s[[i]])))  # break file link
+  #})
+  
+  rs.list <- lapply(files1, function(f) {
+    s <- raster::stack(f)
+    # Read each layer fully into memory, drop file-backed pointer
+    layers <- lapply(1:nlayers(s), function(i) {
+      r <- s[[i]]
+      values <- raster::getValues(r)
+      r2 <- raster::raster(r)  # copy metadata
+      raster::values(r2) <- values
+      return(r2)
+    })
+    raster::stack(layers)
+  })
+  #browser()
+  
+  ###############################################################################
+  # age.offset <- -1 # hack (why are age values in landscape raster stack off by 1?)
+  ###############################################################################
+
+  rs.list <- rapply(rs.list,  function(rs) {
+                      rs[[2]] <- crop(sim$landscape$age, rs[[2]]) %>% mask(., rs[[2]])
+                      rs[[2]][is.nan(rs[[2]])] <- NA
+                      return(rs)})
+  #browser()
   mapply(writeRaster, rs.list, files2, format='GTiff', overwrite=TRUE, datatype='INT4S') 
   return(invisible(sim))
 }
@@ -156,7 +183,7 @@ applyHarvest <- function(sim) {
                       basenames = P(sim)$basenames, 
                       year = year, 
                       mode = P(sim)$scheduler.mode, 
-                      target_masks = P(sim)$target.masks, 
+                      #target_masks = P(sim)$target.masks, 
                       target_areas = P(sim)$target.areas,
                       target_scalefactors = P(sim)$target.scalefactors,
                       mask_area_thresh = P(sim)$mask.area.thresh,

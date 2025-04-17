@@ -30,7 +30,7 @@ import pandas as pd
 from pandas import DataFrame as DF
 import geopandas as gpd
 import matplotlib.pyplot as plt
-import gurobipy as grb
+#import gurobipy as grb
 import rasterio
 import rasterio.plot
 import seaborn as sns
@@ -55,7 +55,7 @@ scenario_name = 'base'
 sda_mode = 'randblk' # 'randpxl'
 obj_mode = 'min_harea' # 'max_harea'
 horizon = 2
-period_length = 1
+period_length = 10
 yields_period_length = 10
 yields_x_unit = 'years'
 time_step = 1
@@ -65,7 +65,7 @@ try:
 except:
     dat_path = '../../../input'
 target_path = join(dat_path, 'targets.csv')
-yld_path = '%s/yld.csv' % dat_path
+yld_path = dat_path
 tolerance = 10.
 clean_inv = False
 rasterize_inv = False
