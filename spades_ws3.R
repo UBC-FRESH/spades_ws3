@@ -76,7 +76,8 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
 ## event functions
 
 Init <- function(sim) {
-    library(R.utils)
+    # library(R.utils) # not necessary
+    library(SpaDES.core) # force loading SpaDES.core if it isn't already, so py_run_file works
     if (is.null(P(sim)$basenames)) stop(paste("'basenames' parameter value not specified in", currentModule(sim)))
     cmp <- grep(pattern = paste0(currentModule(sim), "$"), x = list.files(modulePath(sim))) %>%
            list.files(path = modulePath(sim), full.names = TRUE)[.] # current module path
@@ -201,6 +202,26 @@ applyGrow <- function(sim) {
 
 
 .inputObjects <- function(sim) {
+  # TODO: this should check for "is there a python virtual environment", not "dir.exists" to allow for user's own virtual env.
+    if (!dir.exists(".venv"))
+      system("python -m venv .venv")
+    
+    py_install("numpy")
+    py_install("pandas")
+    py_install("scipy")
+    py_install("rasterio")
+    py_install("fiona")
+    py_install("profilehooks")
+    py_install("geopandas")
+    py_install('matplotlib')
+    py_install("seaborn")
+    # py_install("")
+    
+    reticulate::py_install(
+      packages = "git+https://github.com/UBC-FRESH/ws3.git",
+      method = "pip"
+    )  
+
   #cacheTags <- c(currentModule(sim), "function:.inputObjects") ## uncomment this if Cache is being used
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
