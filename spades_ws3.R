@@ -125,7 +125,7 @@ updateAges <- function(sim, offset = 0) {
   #  s <- raster::stack(f)
   #  raster::stack(lapply(1:nlayers(s), function(i) raster::raster(s[[i]])))  # break file link
   #})
-  
+
   rs.list <- lapply(files1, function(f) {
     s <- raster::stack(f)
     # Read each layer fully into memory, drop file-backed pointer
@@ -139,7 +139,7 @@ updateAges <- function(sim, offset = 0) {
     raster::stack(layers)
   })
   #browser()
-  
+
   ###############################################################################
   # age.offset <- -1 # hack (why are age values in landscape raster stack off by 1?)
   ###############################################################################
@@ -149,7 +149,7 @@ updateAges <- function(sim, offset = 0) {
                       rs[[2]][is.nan(rs[[2]])] <- NA
                       return(rs)})
   #browser()
-  mapply(writeRaster, rs.list, files2, format='GTiff', overwrite=TRUE, datatype='INT4S') 
+  mapply(writeRaster, rs.list, files2, format='GTiff', overwrite=TRUE, datatype='INT4S')
   return(invisible(sim))
 }
 
@@ -180,22 +180,22 @@ applyHarvest <- function(sim) {
   py$base_year <- year
   sim$fm$base_year <- year
   updateAges(sim)
-  py$simulate_harvest(fm = sim$fm, 
-                      basenames = P(sim)$basenames, 
-                      year = year, 
-                      mode = P(sim)$scheduler.mode, 
-                      #target_masks = P(sim)$target.masks, 
+  py$simulate_harvest(fm = sim$fm,
+                      basenames = P(sim)$basenames,
+                      year = year,
+                      mode = P(sim)$scheduler.mode,
+                      #target_masks = P(sim)$target.masks,
                       target_areas = P(sim)$target.areas,
                       target_scalefactors = P(sim)$target.scalefactors,
                       mask_area_thresh = P(sim)$mask.area.thresh,
-                      verbose = P(sim)$verbose) 
+                      verbose = P(sim)$verbose)
   sim$landscape$age <- loadAges(sim)
   return(invisible(sim))
 }
 
 
 applyGrow <- function(sim) {
-  sim$landscape$age <- sim$landscape$age + 1 
+  sim$landscape$age <- sim$landscape$age + 1
   updateAges(sim, offset=1)
   return(invisible(sim))
 }
@@ -205,22 +205,23 @@ applyGrow <- function(sim) {
   # TODO: this should check for "is there a python virtual environment", not "dir.exists" to allow for user's own virtual env.
     if (!dir.exists(".venv"))
       system("python -m venv .venv")
-    
-    py_install("numpy")
-    py_install("pandas")
-    py_install("scipy")
-    py_install("rasterio")
-    py_install("fiona")
-    py_install("profilehooks")
-    py_install("geopandas")
-    py_install('matplotlib')
-    py_install("seaborn")
+
+  browser()
+  needed <- c("numpy", "pandas", "scipy", "rasterio", "fiona", "profilehooks",
+    "geopandas", "matplotlib", "seaborn", "folium")
+  pp <- py_list_packages()
+  if (!all(needed %in% pp$package)) {
+    py_install(needed)
+  }
     # py_install("")
-    
+
+  if (isFALSE(py_module_available("ws3"))) {
     reticulate::py_install(
       packages = "git+https://github.com/UBC-FRESH/ws3.git",
       method = "pip"
-    )  
+    )
+  }
+
 
   #cacheTags <- c(currentModule(sim), "function:.inputObjects") ## uncomment this if Cache is being used
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
