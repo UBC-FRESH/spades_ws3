@@ -206,7 +206,7 @@ applyGrow <- function(sim) {
 
 
   needed <- c("numpy", "pandas", "scipy", "rasterio", "fiona", "profilehooks",
-              "geopandas", "matplotlib", "seaborn", "folium")
+              "geopandas", "matplotlib", "seaborn", "folium", "datalad-installer")
   # reticulate::virtualenv_create(
   #   ".venv",
   #   python = if (!reticulate::virtualenv_exists(".venv")){
