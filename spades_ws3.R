@@ -138,7 +138,6 @@ updateAges <- function(sim, offset = 0) {
     })
     raster::stack(layers)
   })
-  #browser()
 
   ###############################################################################
   # age.offset <- -1 # hack (why are age values in landscape raster stack off by 1?)
@@ -148,13 +147,13 @@ updateAges <- function(sim, offset = 0) {
                       rs[[2]] <- crop(sim$landscape$age, rs[[2]]) %>% mask(., rs[[2]])
                       rs[[2]][is.nan(rs[[2]])] <- NA
                       return(rs)})
-  #browser()
   mapply(writeRaster, rs.list, files2, format='GTiff', overwrite=TRUE, datatype='INT4S')
   return(invisible(sim))
 }
 
 
 loadAges <- function(sim) {
+  # browser()
   year <- as.integer(time(sim) - start(sim) + P(sim)$base.year)
   files <- sapply(P(sim)$basenames,
                   function(bn) file.path(inputPath(sim),
@@ -180,6 +179,7 @@ applyHarvest <- function(sim) {
   py$base_year <- year
   sim$fm$base_year <- year
   updateAges(sim)
+  # browser()
   py$simulate_harvest(fm = sim$fm,
                       basenames = P(sim)$basenames,
                       year = year,
@@ -203,17 +203,27 @@ applyGrow <- function(sim) {
 
 .inputObjects <- function(sim) {
   # TODO: this should check for "is there a python virtual environment", not "dir.exists" to allow for user's own virtual env.
-    if (!dir.exists(".venv"))
-      system("python -m venv .venv")
 
-  browser()
+
   needed <- c("numpy", "pandas", "scipy", "rasterio", "fiona", "profilehooks",
-    "geopandas", "matplotlib", "seaborn", "folium")
+              "geopandas", "matplotlib", "seaborn", "folium")
+  # reticulate::virtualenv_create(
+  #   ".venv",
+  #   python = if (!reticulate::virtualenv_exists(".venv")){
+  #     CBMutils::ReticulateFindPython(version = ">=3.9,<=3.12.7", versionInstall = "3.10:latest")
+  #   },
+  #   packages = needed)
+  #
+  # # Use Python virtual environment
+  # reticulate::use_virtualenv(".venv")
+
+  if (!dir.exists(".venv"))
+    system("python -m venv .venv")
+
   pp <- py_list_packages()
   if (!all(needed %in% pp$package)) {
     py_install(needed)
   }
-    # py_install("")
 
   if (isFALSE(py_module_available("ws3"))) {
     reticulate::py_install(
