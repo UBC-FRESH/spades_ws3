@@ -205,6 +205,7 @@ applyGrow <- function(sim) {
   # TODO: this should check for "is there a python virtual environment", not "dir.exists" to allow for user's own virtual env.
 
 
+  browser()
   needed <- c("numpy", "pandas", "scipy", "rasterio", "fiona", "profilehooks",
               "geopandas", "matplotlib", "seaborn", "folium", "datalad-installer")
   # reticulate::virtualenv_create(
@@ -215,7 +216,7 @@ applyGrow <- function(sim) {
   #   packages = needed)
   #
   # # Use Python virtual environment
-  # reticulate::use_virtualenv(".venv")
+  # reticulate::use_virtualenv(file.path(dirname(modulePath(sim)), ".venv"))
 
   if (!dir.exists(".venv"))
     system("python -m venv .venv")
