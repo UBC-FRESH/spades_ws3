@@ -76,7 +76,8 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
 ## event functions
 
 Init <- function(sim) {
-    library(R.utils)
+    # library(R.utils) # not necessary
+    library(SpaDES.core) # force loading SpaDES.core if it isn't already, so py_run_file works
     if (is.null(P(sim)$basenames)) stop(paste("'basenames' parameter value not specified in", currentModule(sim)))
     cmp <- grep(pattern = paste0(currentModule(sim), "$"), x = list.files(modulePath(sim))) %>%
            list.files(path = modulePath(sim), full.names = TRUE)[.] # current module path
@@ -124,7 +125,7 @@ updateAges <- function(sim, offset = 0) {
   #  s <- raster::stack(f)
   #  raster::stack(lapply(1:nlayers(s), function(i) raster::raster(s[[i]])))  # break file link
   #})
-  
+
   rs.list <- lapply(files1, function(f) {
     s <- raster::stack(f)
     # Read each layer fully into memory, drop file-backed pointer
@@ -137,8 +138,7 @@ updateAges <- function(sim, offset = 0) {
     })
     raster::stack(layers)
   })
-  #browser()
-  
+
   ###############################################################################
   # age.offset <- -1 # hack (why are age values in landscape raster stack off by 1?)
   ###############################################################################
@@ -147,13 +147,13 @@ updateAges <- function(sim, offset = 0) {
                       rs[[2]] <- crop(sim$landscape$age, rs[[2]]) %>% mask(., rs[[2]])
                       rs[[2]][is.nan(rs[[2]])] <- NA
                       return(rs)})
-  #browser()
-  mapply(writeRaster, rs.list, files2, format='GTiff', overwrite=TRUE, datatype='INT4S') 
+  mapply(writeRaster, rs.list, files2, format='GTiff', overwrite=TRUE, datatype='INT4S')
   return(invisible(sim))
 }
 
 
 loadAges <- function(sim) {
+  # browser()
   year <- as.integer(time(sim) - start(sim) + P(sim)$base.year)
   files <- sapply(P(sim)$basenames,
                   function(bn) file.path(inputPath(sim),
@@ -179,28 +179,61 @@ applyHarvest <- function(sim) {
   py$base_year <- year
   sim$fm$base_year <- year
   updateAges(sim)
-  py$simulate_harvest(fm = sim$fm, 
-                      basenames = P(sim)$basenames, 
-                      year = year, 
-                      mode = P(sim)$scheduler.mode, 
-                      #target_masks = P(sim)$target.masks, 
+  # browser()
+  py$simulate_harvest(fm = sim$fm,
+                      basenames = P(sim)$basenames,
+                      year = year,
+                      mode = P(sim)$scheduler.mode,
+                      #target_masks = P(sim)$target.masks,
                       target_areas = P(sim)$target.areas,
                       target_scalefactors = P(sim)$target.scalefactors,
                       mask_area_thresh = P(sim)$mask.area.thresh,
-                      verbose = P(sim)$verbose) 
+                      verbose = P(sim)$verbose)
   sim$landscape$age <- loadAges(sim)
   return(invisible(sim))
 }
 
 
 applyGrow <- function(sim) {
-  sim$landscape$age <- sim$landscape$age + 1 
+  sim$landscape$age <- sim$landscape$age + 1
   updateAges(sim, offset=1)
   return(invisible(sim))
 }
 
 
 .inputObjects <- function(sim) {
+  # TODO: this should check for "is there a python virtual environment", not "dir.exists" to allow for user's own virtual env.
+
+
+  browser()
+  needed <- c("numpy", "pandas", "scipy", "rasterio", "fiona", "profilehooks",
+              "geopandas", "matplotlib", "seaborn", "folium", "datalad-installer")
+  # reticulate::virtualenv_create(
+  #   ".venv",
+  #   python = if (!reticulate::virtualenv_exists(".venv")){
+  #     CBMutils::ReticulateFindPython(version = ">=3.9,<=3.12.7", versionInstall = "3.10:latest")
+  #   },
+  #   packages = needed)
+  #
+  # # Use Python virtual environment
+  # reticulate::use_virtualenv(file.path(dirname(modulePath(sim)), ".venv"))
+
+  if (!dir.exists(".venv"))
+    system("python -m venv .venv")
+
+  pp <- py_list_packages()
+  if (!all(needed %in% pp$package)) {
+    py_install(needed)
+  }
+
+  if (isFALSE(py_module_available("ws3"))) {
+    reticulate::py_install(
+      packages = "git+https://github.com/UBC-FRESH/ws3.git",
+      method = "pip"
+    )
+  }
+
+
   #cacheTags <- c(currentModule(sim), "function:.inputObjects") ## uncomment this if Cache is being used
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
