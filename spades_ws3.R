@@ -203,37 +203,14 @@ applyGrow <- function(sim) {
 
 .inputObjects <- function(sim) {
   # TODO: this should check for "is there a python virtual environment", not "dir.exists" to allow for user's own virtual env.
-
-  #browser()
-  needed <- c("ws3", "datalad[full]")
-
-    #needed <-  c("numpy", "pandas", "scipy", "rasterio", "fiona", "profilehooks",
-  #            "geopandas", "matplotlib", "seaborn", "folium", "datalad-installer")
-  # reticulate::virtualenv_create(
-  #   ".venv",
-  #   python = if (!reticulate::virtualenv_exists(".venv")){
-  #     CBMutils::ReticulateFindPython(version = ">=3.9,<=3.12.7", versionInstall = "3.10:latest")
-  #   },
-  #   packages = needed)
-  #
-  # # Use Python virtual environment
-  # reticulate::use_virtualenv(file.path(dirname(modulePath(sim)), ".venv"))
-
-  if (!dir.exists(".venv"))
-    system("python -m venv .venv")
-
-  pp <- py_list_packages()
-  if (!all(needed %in% pp$package)) {
-    py_install(needed)
+  needed <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "seaborn", "folium")
+  if (reticulate::virtualenv_exists("r-reticulate")) {
+    reticulate::py_install(needed)
+  } else {
+    reticulate::virtualenv_create("r-reticulate", packages = needed)
   }
-
-  #if (isFALSE(py_module_available("ws3"))) {
-  #  reticulate::py_install(
-  #    packages = "git+https://github.com/UBC-FRESH/ws3.git",
-  #    method = "pip"
-  #  )
-  #}
-
+  reticulate::use_virtualenv("r-reticulate")
+  
   # make sure that datalad-managed input files have all been downloaded from the cloud
   system("datalad get input -r")
 
