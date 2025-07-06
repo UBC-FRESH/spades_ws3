@@ -147,7 +147,7 @@ def simulate_harvest(fm, basenames, year,
     bootstrap_areas(fm, basenames, tif_path, hdt, year, new_dts=False)
     fm.reset()
     if mode == 'optimize':
-        schedule_harvest_optimize(fm, basenames, target_path=target_path)
+        schedule_harvest_optimize(fm, basenames, p_max_hv=target_scalefactors)
     elif mode == 'areacontrol':
         schedule_harvest_areacontrol(fm, 
                                      target_masks=target_masks, 

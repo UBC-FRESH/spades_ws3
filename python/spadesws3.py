@@ -52,9 +52,10 @@ def cmp_c_caa(fm, path, expr, acodes, mask=None): # product, named actions
             result[t] = fm.compile_product(t, expr, d['acode'], [d['dtk']], d['age'], coeff=False)
     return result
 
-def _gen_scen_base(fm, basenames, name='base', util=0.85, param_funcs=None, harvest_acode='harvest',  
-                   tvy_name='totvol', toffset=0, obj_mode='max_hvol', target_path='./input/targets.csv',
-                   max_tp=2074, cacut=None, mask=None):
+
+def __gen_scen_base(fm, basenames, name='base', util=0.85, param_funcs=None, harvest_acode='harvest',  
+                   tvy_name='totvol', toffset=0, obj_mode='max_hvol', 
+                   cvcut_=None, mask=None):
     from functools import partial
     acodes = ['null', harvest_acode]  
     vexpr = '%s * %0.2f' % (tvy_name, util)
@@ -104,9 +105,85 @@ def _gen_scen_base(fm, basenames, name='base', util=0.85, param_funcs=None, harv
     return fm.add_problem(name, coeff_funcs, cflw_e, cgen_data=cgen_data, acodes=acodes, sense=sense, mask=mask)
 
 
-def gen_scen(fm, basenames, name, util, param_funcs, toffset=0, obj_mode='max_hvol', cacut=None, mask=None, target_path='./input/targets.csv'):
+def _gen_scen(fm, basenames, name, util, param_funcs, toffset=0, obj_mode='max_hvol', cacut=None, mask=None, target_path='./input/targets.csv'):
     dsp = {'base':_gen_scen_base}
     return dsp[name](fm, basenames, name, util, param_funcs=param_funcs, toffset=toffset, obj_mode=obj_mode, cacut=cacut, mask=mask, target_path=target_path)
+
+
+# new (more general) implementation
+def _gen_scen_base(fm, basenames, name,
+                   util=0.85, obj_mode='max_hv', tvy_name='totvol', harvest_acode='harvest',
+                   cgen_hv=None, cgen_ha=None, cgen_hv_e=None, cgen_ha_e=None, cgen_e_default=0.01,
+                   cflw_hv=True, cflw_ha=True, cflw_hv_e=None, cflw_ha_e=None, cflw_e_default=0.05,
+                   mask=None):
+    from functools import partial
+    acodes = ['null', harvest_acode]
+    vexpr = '%s * %0.2f' % (tvy_name, util)
+    T = fm.periods
+    cflw_e, cgen_data = {}, {}
+    if obj_mode == 'max_hv':
+        sense = ws3.opt.SENSE_MAXIMIZE 
+        zexpr = vexpr
+    elif obj_mode == 'min_ha':
+        sense = ws3.opt.SENSE_MINIMIZE 
+        zexpr = '1.'
+    else:
+        raise ValueError('Invalid obj_mode: %s' % obj_mode)
+    if not cgen_hv_e:
+        cgen_hv_e = {(bn, t):cgen_e_default for bn in basenames for t in T}
+    if not cgen_ha_e:
+        cgen_ha_e = {(bn, t):cgen_e_default for bn in basenames for t in T}
+    if not cflw_hv_e:
+        cflw_hv_e = {(bn, t):cflw_e_default for bn in basenames for t in T}
+    if not cflw_ha_e:
+        cflw_ha_e = {(bn, t):cflw_e_default for bn in basenames for t in T}
+    coeff_funcs = {'z':partial(cmp_c_z, expr=zexpr)}
+    coeff_funcs.update({'cgen_hv_%s' % bn:partial(cmp_c_caa, expr=vexpr, acodes=[harvest_acode], mask=(bn, '?', '?', '?')) 
+                        for bn in basenames})
+    coeff_funcs.update({'cgen_ha_%s' % bn:partial(cmp_c_caa, expr='1.', acodes=[harvest_acode], mask=(bn, '?', '?', '?')) 
+                        for bn in basenames})
+    coeff_funcs.update({'cflw_hv_%s' % bn:partial(cmp_c_caa, expr=vexpr, acodes=[harvest_acode], mask=(bn, '?', '?', '?')) 
+                        for bn in basenames})
+    coeff_funcs.update({'cflw_ha_%s' % bn:partial(cmp_c_caa, expr='1.', acodes=[harvest_acode], mask=(bn, '?', '?', '?')) 
+                        for bn in basenames})
+    for bn in basenames:
+        if cgen_hv:
+            cgen_data.update({'cgen_hv_%s' % bn:{'lb':{t:cgen_hv[bn, t] * (1. - cgen_hv_e[bn, t])  for t in T},
+                                                 'ub':{t:cgen_hv[bn, t] for t in T}}})
+        else: # flow constraints only guaranteed to be feasible if no arbitrary cgen constraints on harvest volume
+            cflw_e.update({'cflw_hv_%s' % bn:({t:cflw_hv_e[bn, t] for t in T}, 1)})
+
+        if cgen_ha:
+            cgen_data.update({'cgen_ha_%s' % bn:{'lb':{t:cgen_ha[bn, t] * (1. - cgen_ha_e[bn, t])  for t in T},
+                                                 'ub':{t:cgen_ha[bn, t] for t in T}}})
+
+        cflw_e.update({'cflw_ha_%s' % bn:({t:cflw_ha_e[bn, t] for t in T}, 1)})
+    return fm.add_problem(name, coeff_funcs, cflw_e, cgen_data=cgen_data, acodes=acodes, sense=sense, mask=mask)
+
+
+def gen_scen(fm, basenames, name, 
+             util=0.85, obj_mode='max_hv', tvy_name='totvol', 
+             cgen_hv=None, cgen_ha=None, cgen_hv_e=None, cgen_ha_e=None, cgen_e_default=0.01,
+             cflw_hv=True, cflw_ha=True, cflw_hv_e=None, cflw_ha_e=None, cflw_e_default=0.05,
+             mask=None):
+    dsp = {'base':_gen_scen_base}
+    return dsp[name](fm=fm, 
+                     basenames=basenames, 
+                     name=name, 
+                     util=util, 
+                     obj_mode=obj_mode, 
+                     tvy_name=tvy_name,
+                     cgen_hv=cgen_hv,
+                     cgen_ha=cgen_ha,
+                     cgen_hv_e=cgen_hv_e,
+                     cgen_ha_e=cgen_ha_e,
+                     cgen_e_default=cgen_e_default,
+                     cflw_hv=cflw_hv,
+                     cflw_ha=cflw_ha,
+                     cflw_hv_e=cflw_hv_e,
+                     cflw_ha_e=cflw_ha_e,
+                     cflw_e_default=cflw_e_default,
+                     mask=mask)
 
 
 def unhash_ij(problem):
@@ -304,15 +381,38 @@ def compile_basecodes(hdt, basenames, theme_cols):
     return basecodes
 
 
-def schedule_harvest_optimize(fm, basenames, scenario_name='base', util=0.85, param_funcs=None, 
-                              target_path='./input/targets.csv', obj_mode='min_harea', mask=None):
-    #import gurobipy as grb
-    p = gen_scen(fm, basenames, scenario_name, util, param_funcs=param_funcs, toffset=0, 
-                 obj_mode=obj_mode, mask=mask, target_path=target_path)
-    m = p.solve()
-    #if m.status != grb.GRB.OPTIMAL:
-    #    print('Model not optimal.')
-    #    return None
+def schedule_harvest_optimize(fm, basenames, scenario_name='base', tvy_name='totvol', util=0.85, 
+                              p_max_hv={}, mask=None):
+    ########################################
+    # Stage 1: find maximum even-flow harvest volumes
+    p = gen_scen(fm=fm, 
+                 basenames=basenames, 
+                 name=scenario_name, 
+                 util=util)
+    p.solve()
+    sch = fm.compile_schedule(p)
+    fm.reset_actions()
+    fm.initialize_areas()
+    fm.apply_schedule(sch, 
+                      force_integral_area=True, 
+                      override_operability=True,
+                      fuzzy_age=True,
+                      recourse_enabled=True,
+                      verbose=False,
+                      compile_c_ycomps=True)
+    vexpr = '%s * %0.2f' % (tvy_name, util)
+    hv_coeffs = {bn:p_max_hv[bn] if bn in p_max_hv else 1. for bn in basenames}
+    cgen_hv = {(bn, t):fm.compile_product(t, vexpr, dtype_keys=fm.unmask((bn, '?', '?', '?'))) * hv_coeffs[bn]
+                for bn in basenames for t in fm.periods}
+    ########################################
+    # Stage 2: find minimum harvest areas subject to harvest volume constraints
+    p = gen_scen(fm=fm,
+                 basenames=basenames,
+                 name=scenario_name,
+                 util=util,
+                 obj_mode='min_ha',
+                 cgen_hv=cgen_hv)
+    p.solve()
     sch = fm.compile_schedule(p)
     fm.reset_actions()
     fm.initialize_areas()

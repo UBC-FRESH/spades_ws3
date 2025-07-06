@@ -179,7 +179,7 @@ applyHarvest <- function(sim) {
   py$base_year <- year
   sim$fm$base_year <- year
   updateAges(sim)
-  # browser()
+  #browser()
   py$simulate_harvest(fm = sim$fm,
                       basenames = P(sim)$basenames,
                       year = year,
@@ -204,10 +204,11 @@ applyGrow <- function(sim) {
 .inputObjects <- function(sim) {
   # TODO: this should check for "is there a python virtual environment", not "dir.exists" to allow for user's own virtual env.
 
+  #browser()
+  needed <- c("ws3", "datalad[full]")
 
-  browser()
-  needed <- c("numpy", "pandas", "scipy", "rasterio", "fiona", "profilehooks",
-              "geopandas", "matplotlib", "seaborn", "folium", "datalad-installer")
+    #needed <-  c("numpy", "pandas", "scipy", "rasterio", "fiona", "profilehooks",
+  #            "geopandas", "matplotlib", "seaborn", "folium", "datalad-installer")
   # reticulate::virtualenv_create(
   #   ".venv",
   #   python = if (!reticulate::virtualenv_exists(".venv")){
@@ -226,13 +227,15 @@ applyGrow <- function(sim) {
     py_install(needed)
   }
 
-  if (isFALSE(py_module_available("ws3"))) {
-    reticulate::py_install(
-      packages = "git+https://github.com/UBC-FRESH/ws3.git",
-      method = "pip"
-    )
-  }
+  #if (isFALSE(py_module_available("ws3"))) {
+  #  reticulate::py_install(
+  #    packages = "git+https://github.com/UBC-FRESH/ws3.git",
+  #    method = "pip"
+  #  )
+  #}
 
+  # make sure that datalad-managed input files have all been downloaded from the cloud
+  system("datalad get input -r")
 
   #cacheTags <- c(currentModule(sim), "function:.inputObjects") ## uncomment this if Cache is being used
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
