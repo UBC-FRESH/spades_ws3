@@ -19,6 +19,7 @@ defineModule(sim, list(
   parameters = rbind(
     defineParameter("verbose", "numeric", 0, NA, NA, "console output verbosity level"),
     defineParameter("basenames", "character", NA, NA, NA, "MU baseneames to load"),
+    defineParameter("enable.debugpy", "character", NA, NA, NA, "enable debugpy"),
     defineParameter("horizon", "numeric", 1L, NA, NA, "ws3 simulation horizon (periods)"),
     defineParameter("base.year", "numeric", 2015L, NA, NA, "ws3 simulation base year"),
     defineParameter("scheduler.mode", "character", "optimize", NA, NA, "Switch between 'optimize' and 'areacontrol' harvest scheduler modes"),
@@ -84,6 +85,7 @@ Init <- function(sim) {
     #py$sys$path <- insert(py$sys$path, 1, file.path(cmp, "python"))
     #py$sys$path <- insert(py$sys$path, 1, file.path(cmp, "python", "ws3"))
     py$basenames <- P(sim)$basenames
+    py$enable_debugpy <- P(sim)$enable.debugpy
     py_run_file(file.path(cmp, "python", "spadesws3_params.py"))
     py$base_year <- P(sim)$base.year
     py$horizon <- P(sim)$horizon
@@ -203,7 +205,7 @@ applyGrow <- function(sim) {
 
 .inputObjects <- function(sim) {
   # TODO: this should check for "is there a python virtual environment", not "dir.exists" to allow for user's own virtual env.
-  needed <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "seaborn", "folium")
+  needed <- c("numba>=0.58", "ws3", "datalad[full]", "geopandas", "seaborn", "folium", "debugpy")
   if (reticulate::virtualenv_exists("r-reticulate")) {
     reticulate::py_install(needed)
   } else {
