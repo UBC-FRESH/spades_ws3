@@ -3,34 +3,30 @@ from os import listdir
 from os.path import isfile, join, dirname
 import sys
 
-########################################################################################################
-# import ws3 from local copy
-#if use_local_ws3:
-#    ws3_path = os.path.abspath('./ws3')
-#    _path = os.path.abspath(join(dirname(__file__), ws3_path))
+if enable_debugpy:
+    import debugpy
+    try:
+        debugpy.listen(("localhost", 5678))
+    except RuntimeError:
+        # Already listening
+        pass
 
-#ws3_path = os.path.abspath(join(r.getPaths()['modulePath'], r.currentModule()))
-#ws3_path = os.path.abspath(join(r.getPaths()['modulePath'], r.currentModule()))
-#try:
-#_path = os.path.abspath(join(dirname(__file__), ws3_path))
-#except:
-#    _path = os.path.abspath(join(dirname('__file__'), ws3_path))
-#if not _path in os.sys.path: os.sys.path.insert(0, _path)
+    if not debugpy.is_client_connected():
+        print("Waiting for debugger attach...")
+        debugpy.wait_for_client()
+    
+########################################################################################################
 import ws3
 from ws3.forest import ForestModel, Action
 from ws3.spatial import ForestRaster
 from ws3.common import clean_vector_data, reproject_vector_data, rasterize_stands, hash_dt, warp_raster
 ########################################################################################################
 
-#print(os.getcwd())
-#print(os.sys.path)
-
 import numpy as np
 import pandas as pd
 from pandas import DataFrame as DF
 import geopandas as gpd
 import matplotlib.pyplot as plt
-#import gurobipy as grb
 import rasterio
 import rasterio.plot
 import seaborn as sns

@@ -464,8 +464,18 @@ def schedule_harvest_areacontrol(fm, period=1, acode='harvest', util=0.85,
             #    dt = fm.dtypes[dtk]
             #    awr.append(dt.ycomp('totvol').mai().ytp().lookup(0) * dt.area(0))
             #r = sum(awr)  / masked_area
-            asf = 1. if not target_scalefactors else target_scalefactors[i]  
+            _target_scalefactor = 1.
+            if target_scalefactors and isinstance(target_scalefactors, dict):
+                for _mask in [(bn, '1', '?', '?') for bn in target_scalefactors]:
+                    #__mask = tuple(_mask.split())
+                    try:
+                        if fm.match_mask(_mask, fm.unmask(mask)[0]): _target_scalefactor = target_scalefactor[_mask]
+                    except:
+                        pass
+            asf = _target_scalefactor  
             ta = (1/r) * masked_area * asf
+            #debugpy.breakpoint()
+
             target_areas.append(ta)
     for mask, target_area in zip(target_masks, target_areas):
         if verbose > 0:
