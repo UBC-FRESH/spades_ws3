@@ -401,7 +401,9 @@ def schedule_harvest_optimize(fm, basenames, scenario_name='base', tvy_name='tot
                       verbose=False,
                       compile_c_ycomps=True)
     vexpr = '%s * %0.2f' % (tvy_name, util)
-    hv_coeffs = {bn:p_max_hv[bn] if bn in p_max_hv else 1. for bn in basenames}
+    hv_coeffs = {bn:p_max_hv[bn] if p_max_hv and isinstance(p_max_hv, dict) and bn in p_max_hv 
+                 else 1. 
+                 for bn in basenames}
     cgen_hv = {(bn, t):fm.compile_product(t, vexpr, dtype_keys=fm.unmask((bn, '?', '?', '?'))) * hv_coeffs[bn]
                 for bn in basenames for t in fm.periods}
     ########################################
