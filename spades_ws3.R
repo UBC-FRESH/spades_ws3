@@ -19,7 +19,7 @@ defineModule(sim, list(
   parameters = rbind(
     defineParameter("verbose", "numeric", 0, NA, NA, "console output verbosity level"),
     defineParameter("basenames", "character", NA, NA, NA, "MU baseneames to load"),
-    defineParameter("enable.debugpy", "character", NA, NA, NA, "enable debugpy"),
+    defineParameter("enable.debugpy", "logical", FALSE, NA, NA, "enable debugpy"),
     defineParameter("horizon", "numeric", 1L, NA, NA, "ws3 simulation horizon (periods)"),
     defineParameter("base.year", "numeric", 2015L, NA, NA, "ws3 simulation base year"),
     defineParameter("scheduler.mode", "character", "optimize", NA, NA, "Switch between 'optimize' and 'areacontrol' harvest scheduler modes"),
@@ -77,8 +77,9 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
 ## event functions
 
 Init <- function(sim) {
+    browser()
     # library(R.utils) # not necessary
-    library(SpaDES.core) # force loading SpaDES.core if it isn't already, so py_run_file works
+    # library(SpaDES.core) # force loading SpaDES.core if it isn't already, so py_run_file works
     if (is.null(P(sim)$basenames)) stop(paste("'basenames' parameter value not specified in", currentModule(sim)))
     cmp <- grep(pattern = paste0(currentModule(sim), "$"), x = list.files(modulePath(sim))) %>%
            list.files(path = modulePath(sim), full.names = TRUE)[.] # current module path
@@ -212,7 +213,7 @@ applyGrow <- function(sim) {
     reticulate::virtualenv_create("r-reticulate", packages = needed)
   }
   reticulate::use_virtualenv("r-reticulate")
-  
+
   # make sure that datalad-managed input files have all been downloaded from the cloud
   system("datalad get input -r")
 
