@@ -23,11 +23,9 @@ defineModule(sim, list(
     defineParameter("horizon", "numeric", 1L, NA, NA, "ws3 simulation horizon (periods)"),
     defineParameter("base.year", "numeric", 2015L, NA, NA, "ws3 simulation base year"),
     defineParameter("scheduler.mode", "character", "optimize", NA, NA, "Switch between 'optimize' and 'areacontrol' harvest scheduler modes"),
-    defineParameter("target.masks", "character", NULL, NA, NA, "Target masks (in '? ? ? ?' format). Only applicable if using 'areacontrol' scheduler mode."),
-    #defineParameter("target.areas", "numermic", NULL, NA, NA, "Target areas (ha).  Only applicable if using 'areacontrol' scheduler mode."),
     defineParameter("target.scalefactors", "numeric", NULL, NA, NA, "Target areas scale factors.  Only applicable if using 'areacontrol' scheduler mode."),
     defineParameter("mask.area.thresh", "numeric", 0., NA, NA, "Mask area threshold (for aggregation of bootstrapped masks).  Only applicable if using 'areacontrol' scheduler mode."),
-    defineParameter("tifPath", 'character', 'tif', NA, NA, desc = 'name of directory with tifs in inputs'),
+    defineParameter("tif.path", 'character', 'tif', NA, NA, desc = 'name of directory with tifs in inputs'),
     defineParameter("yearOfFirstHarvest", 'numeric', start(sim), NA, NA, "year to schedule first harvest"),
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first plot event should occur"),
     defineParameter(".plotInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between plot events"),
@@ -110,12 +108,12 @@ updateAges <- function(sim, offset = 0) {
   year <- as.integer(time(sim) - start(sim) + P(sim)$base.year)
   files1 <- sapply(P(sim)$basenames,
                    function(bn) file.path(inputPath(sim),
-                                          P(sim)$tifPath,
+                                          P(sim)$tif.path,
                                           bn,
                                           paste("inventory_", toString(year), ".tif", sep="")))
   files2 <- sapply(P(sim)$basenames,
                    function(bn) file.path(inputPath(sim),
-                                          P(sim)$tifPath,
+                                          P(sim)$tif.path,
                                           bn,
                                           paste("inventory_", toString(year+offset), ".tif", sep="")))
   #rs.list <- sapply(files1, stack) # one stack per MU
@@ -159,7 +157,7 @@ loadAges <- function(sim) {
   year <- as.integer(time(sim) - start(sim) + P(sim)$base.year)
   files <- sapply(P(sim)$basenames,
                   function(bn) file.path(inputPath(sim),
-                                         P(sim)$tifPath,
+                                         P(sim)$tif.path,
                                          bn,
                                          paste("inventory_", toString(year), ".tif", sep="")))
   x <- sapply(files, raster, band=2)
@@ -186,8 +184,6 @@ applyHarvest <- function(sim) {
                       basenames = P(sim)$basenames,
                       year = year,
                       mode = P(sim)$scheduler.mode,
-                      #target_masks = P(sim)$target.masks,
-                      target_areas = P(sim)$target.areas,
                       target_scalefactors = P(sim)$target.scalefactors,
                       mask_area_thresh = P(sim)$mask.area.thresh,
                       verbose = P(sim)$verbose)
