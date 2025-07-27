@@ -125,7 +125,7 @@ def kwargs():
               'compile_actions':True,
               'yields_x_unit':yields_x_unit,
               'yields_period_length':int(yields_period_length),
-              'verbose':1}
+              'verbose':False}
     return kwargs    
 
 
@@ -149,6 +149,6 @@ def simulate_harvest(fm, basenames, year,
                                      verbose=verbose)
     else: # bad mode value
         raise ValueError('Bad mode value')
-    sda(fm, basenames, 1, tif_path, hdt, sda_mode=sda_mode)
+    sda(fm, basenames, 1, tif_path, hdt, sda_mode=sda_mode, verbose=verbose)
 
 

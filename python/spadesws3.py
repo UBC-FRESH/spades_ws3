@@ -242,8 +242,8 @@ def bootstrap_yields(fm, yld_path, spcode='canfi_species',
         #species_code = _canfi_map[au_row.canfi_species]
         #yname = 'spcvol_%s' % species_code
         yname = 's%04d' % int(au_row.canfi_species)
-        print()
-        print(au_id, yname)
+        #print()
+        #print(au_id, yname)
         #for is_managed in (0, 1):
         for is_managed in [0]:
             curve_id = au_row.unmanaged_curve_id if not is_managed else au_row.managed_curve_id
@@ -257,7 +257,7 @@ def bootstrap_yields(fm, yld_path, spcode='canfi_species',
             fm.yields.append((mask, 'a', [(yname, c)]))
             fm.ynames.add(yname)
             for dtk in dt_keys: 
-                print(au_id, is_managed, curve_id, mask, yname, dtk)
+                #print(au_id, is_managed, curve_id, mask, yname, dtk)
                 fm.dtypes[dtk].add_ycomp('a', yname, c)
     # add total volume curve ###
     expr = '_SUM(%s)' % ', '.join(fm.ynames)
@@ -400,7 +400,9 @@ def schedule_harvest_optimize(fm, basenames, scenario_name='base', tvy_name='tot
                       verbose=False,
                       compile_c_ycomps=True)
     vexpr = '%s * %0.2f' % (tvy_name, util)
-    hv_coeffs = {bn:p_max_hv[bn] if bn in p_max_hv else 1. for bn in basenames}
+    hv_coeffs = {bn:p_max_hv[bn] if p_max_hv and isinstance(p_max_hv, dict) and bn in p_max_hv 
+                 else 1. 
+                 for bn in basenames}
     cgen_hv = {(bn, t):fm.compile_product(t, vexpr, dtype_keys=fm.unmask((bn, '?', '?', '?'))) * hv_coeffs[bn]
                 for bn in basenames for t in fm.periods}
     ########################################
@@ -470,7 +472,8 @@ def schedule_harvest_areacontrol(fm, period=None, acode='harvest', util=0.85,
     return sch
 
 
-def sda(fm, basenames, time_step, tif_path, hdt, acode_map=None, nthresh=10, sda_mode='randblk', horizon=1):
+def sda(fm, basenames, time_step, tif_path, hdt, acode_map=None, nthresh=10, 
+        sda_mode='randblk', horizon=1, verbose=False):
     from pathlib import Path
     from ws3.spatial import ForestRaster
     from ws3.common import hash_dt
@@ -498,7 +501,7 @@ def sda(fm, basenames, time_step, tif_path, hdt, acode_map=None, nthresh=10, sda
         print('SDA for TSA', bn)
         mask = (bn, '?', '?', '?')
         fr = ForestRaster(**cmp_fr_kwargs(bn))
-        fr.allocate_schedule(mask=mask, verbose=1, sda_mode=sda_mode, nthresh=nthresh)
+        fr.allocate_schedule(mask=mask, verbose=verbose, sda_mode=sda_mode, nthresh=nthresh)
         fr.cleanup()
 
 
