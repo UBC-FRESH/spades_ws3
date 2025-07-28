@@ -391,8 +391,7 @@ def schedule_harvest_optimize(fm, basenames, scenario_name='base', tvy_name='tot
                  util=util)
     p.solve()
     sch = fm.compile_schedule(p)
-    fm.reset_actions()
-    fm.initialize_areas()
+    fm.reset()
     fm.apply_schedule(sch, 
                       force_integral_area=True, 
                       override_operability=True,
@@ -416,8 +415,7 @@ def schedule_harvest_optimize(fm, basenames, scenario_name='base', tvy_name='tot
                  cgen_hv=cgen_hv)
     p.solve()
     sch = fm.compile_schedule(p)
-    fm.reset_actions()
-    fm.initialize_areas()
+    fm.reset()
     fm.apply_schedule(sch, 
                       force_integral_area=True, 
                       override_operability=True,
@@ -428,67 +426,54 @@ def schedule_harvest_optimize(fm, basenames, scenario_name='base', tvy_name='tot
     return sch
 
 
-def schedule_harvest_areacontrol(fm, period=1, acode='harvest', util=0.85, 
-                                 target_masks=None, target_areas=None, target_scalefactors=None,
+def schedule_harvest_areacontrol(fm, period=None, acode='harvest', util=0.85, 
+                                 target_scalefactors=None,
                                  mask_area_thresh=0.,
                                  verbose=0):
-    fm.reset_actions()
-    if not target_areas:
-        if not target_masks: # default to AU-wise THLB 
-            au_vals = []
-            au_agg = []
-            for au in fm.theme_basecodes(2):
-                mask = '? 1 %s ?' % au
-                masked_area = fm.inventory(0, mask=mask)
-                if masked_area > mask_area_thresh:
-                    au_vals.append(au)
-                else:
-                    au_agg.append(au)
-                    if verbose > 0:
-                        print('adding to au_agg', mask, masked_area)
-            if au_agg:
-                fm._themes[2]['areacontrol_au_agg'] = au_agg 
-                au_vals.append('areacontrol_au_agg')
-            target_masks = ['? 1 %s ?' % au for au in au_vals]
-        #print(target_masks)
-        #assert False
-      
-        target_areas = [] # TO DO: remove target_areas function arg (not needed)
-
-        for i, mask in enumerate(target_masks): # compute area-weighted mean CMAI age for each masked DT set
-            masked_area = fm.inventory(0, mask=mask, verbose=verbose)
-            if not masked_area: continue
-            r = sum((fm.dtypes[dtk].ycomp('totvol').mai().ytp().lookup(0) * fm.dtypes[dtk].area(0)) for dtk in fm.unmask(mask))
-            r /= masked_area
-            #awr = []
-            #dtype_keys = fm.unmask(mask)
-            #for dtk in dtype_keys:
-            #    dt = fm.dtypes[dtk]
-            #    awr.append(dt.ycomp('totvol').mai().ytp().lookup(0) * dt.area(0))
-            #r = sum(awr)  / masked_area
-            _target_scalefactor = 1.
-            if target_scalefactors and isinstance(target_scalefactors, dict):
-                for _mask in [(bn, '1', '?', '?') for bn in target_scalefactors]:
-                    #__mask = tuple(_mask.split())
-                    try:
-                        if fm.match_mask(_mask, fm.unmask(mask)[0]): _target_scalefactor = target_scalefactor[_mask]
-                    except:
-                        pass
-            asf = _target_scalefactor  
-            ta = (1/r) * masked_area * asf
-            #debugpy.breakpoint()
-
-            target_areas.append(ta)
-    for mask, target_area in zip(target_masks, target_areas):
-        if verbose > 0:
-            print('calling areaselector', period, acode, target_area, mask)
-        fm.areaselector.operate(period, acode, target_area, mask=mask, verbose=verbose)
+    fm.reset() #fm.reset_actions()
+    au_vals = []
+    au_agg = []
+    for au in fm.theme_basecodes(2):
+        mask = '? 1 %s ?' % au
+        masked_area = fm.inventory(0, mask=mask)
+        if masked_area > mask_area_thresh:
+            au_vals.append(au)
+        else:
+            au_agg.append(au)
+            if verbose > 0:
+                print('adding to au_agg', mask, masked_area)
+    if au_agg:
+        fm._themes[2]['areacontrol_au_agg'] = au_agg 
+        au_vals.append('areacontrol_au_agg')
+    target_masks = ['? 1 %s ?' % au for au in au_vals]
+    target_areas = []
+    for i, mask in enumerate(target_masks): # compute area-weighted mean CMAI age for each masked DT set
+        masked_area = fm.inventory(0, mask=mask, verbose=verbose)
+        if not masked_area: continue
+        r = sum((fm.dtypes[dtk].ycomp('totvol').mai().ytp().lookup(0) * fm.dtypes[dtk].area(0)) for dtk in fm.unmask(mask))
+        r /= masked_area
+        _target_scalefactor = 1.
+        if target_scalefactors and isinstance(target_scalefactors, dict):
+            for _mask in [(bn, '1', '?', '?') for bn in target_scalefactors]:
+                try:
+                    if fm.match_mask(_mask, fm.unmask(mask)[0]): _target_scalefactor = target_scalefactors[_mask[0]]
+                except:
+                    pass
+        asf = _target_scalefactor  
+        ta = (1/r) * masked_area * asf * fm.period_length
+        target_areas.append(ta)
+    periods = fm.periods if not period else [period]
+    for period in periods:
+        for mask, target_area in zip(target_masks, target_areas):
+            if verbose > 0:
+                print('calling areaselector', period, acode, target_area, mask)
+            fm.areaselector.operate(period, acode, target_area, mask=mask, verbose=verbose)
     sch = fm.compile_schedule()
     return sch
 
 
 def sda(fm, basenames, time_step, tif_path, hdt, acode_map=None, nthresh=10, 
-        sda_mode='randblk', verbose=False):
+        sda_mode='randblk', horizon=1, verbose=False):
     from pathlib import Path
     from ws3.spatial import ForestRaster
     from ws3.common import hash_dt
@@ -506,7 +491,7 @@ def sda(fm, basenames, time_step, tif_path, hdt, acode_map=None, nthresh=10,
                      'snk_path':_tif_path,
                      'acode_map':acode_map,
                      'forestmodel':fm,
-                     'horizon':fm.horizon,
+                     'horizon':horizon,
                      'period_length':fm.period_length,
                      'time_step':time_step,
                      'base_year':fm.base_year,

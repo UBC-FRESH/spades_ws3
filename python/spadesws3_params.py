@@ -86,7 +86,7 @@ snk_epsg = 3005 # ESPG:3005 corresponds to NAD83/BC Albers
 sns.set_style('dark')
 hdt_path = '%s/hdt' % dat_path
 coast_bn = ['tsa01', 'tsa02', 'tsa03'] # FIX ME: totally bogus (check GIS data for real coast TSA codes) 
-oe_harvest = '_age >= 40 and _age <= 999'
+oe_harvest = '_age >= 100 and _age <= 400'
 action_params = {'harvest':{'oe':oe_harvest,
                             'mask':('?', '1', '?', '?'),
                             'is_harvest':True,
@@ -135,8 +135,6 @@ def bootstrap_forestmodel_kwargs():
 
 def simulate_harvest(fm, basenames, year, 
                      mode='optimize', 
-                     target_masks=None, 
-                     target_areas=None,
                      target_scalefactors=None,
                      mask_area_thresh=0.,
                      verbose=False):
@@ -146,8 +144,6 @@ def simulate_harvest(fm, basenames, year,
         schedule_harvest_optimize(fm, basenames, p_max_hv=target_scalefactors)
     elif mode == 'areacontrol':
         schedule_harvest_areacontrol(fm, 
-                                     target_masks=target_masks, 
-                                     target_areas=target_areas, 
                                      target_scalefactors=target_scalefactors,
                                      mask_area_thresh=mask_area_thresh,
                                      verbose=verbose)
