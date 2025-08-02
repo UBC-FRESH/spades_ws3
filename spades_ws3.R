@@ -17,6 +17,7 @@ defineModule(sim, list(
   documentation = list("README.txt", "spades_ws3.Rmd"),
   reqdPkgs = list('R.utils', 'reticulate'),
   parameters = rbind(
+    defineParameter("workers", "numeric", 1L, NA, NA, "number of worker threads to use for paralellized functions"),
     defineParameter("verbose", "numeric", 0, NA, NA, "console output verbosity level"),
     defineParameter("basenames", "character", NA, NA, NA, "MU baseneames to load"),
     defineParameter("enable.debugpy", "character", NA, NA, NA, "enable debugpy"),
@@ -186,7 +187,8 @@ applyHarvest <- function(sim) {
                       mode = P(sim)$scheduler.mode,
                       target_scalefactors = P(sim)$target.scalefactors,
                       mask_area_thresh = P(sim)$mask.area.thresh,
-                      verbose = P(sim)$verbose)
+                      verbose = P(sim)$verbose,
+                      workers=P(sim)$workers)
   sim$landscape$age <- loadAges(sim)
   return(invisible(sim))
 }

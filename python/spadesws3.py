@@ -8,6 +8,32 @@ except:
     import pickle
 import ws3
 
+# from concurrent.futures import ProcessPoolExecutor
+# from multiprocessing import get_context
+
+# class PersistentWorkerPool:
+#     """
+#     Context manager for a persistent ProcessPoolExecutor.
+#     Reuses the same pool across multiple pipeline stages.
+#     """
+#     def __init__(self, workers):
+#         self.workers = workers
+#         self.executor = None
+
+#     def __enter__(self):
+#         if self.workers > 1:
+#             ctx = get_context("spawn")
+#             self.executor = ProcessPoolExecutor(
+#                 max_workers=self.workers,
+#                 mp_context=ctx
+#             )
+#         return self.executor
+
+#     def __exit__(self, exc_type, exc_value, traceback):
+#         if self.executor is not None:
+#             self.executor.shutdown()
+
+
 def read_basenames(path):
     return [line.lower().strip().split(' ')[0] 
         for line in open(path, 'r') if not line.startswith('#')]
@@ -53,61 +79,62 @@ def cmp_c_caa(fm, path, expr, acodes, mask=None): # product, named actions
     return result
 
 
-def __gen_scen_base(fm, basenames, name='base', util=0.85, param_funcs=None, harvest_acode='harvest',  
-                   tvy_name='totvol', toffset=0, obj_mode='max_hvol', 
-                   cvcut_=None, mask=None):
-    from functools import partial
-    acodes = ['null', harvest_acode]  
-    vexpr = '%s * %0.2f' % (tvy_name, util)
-    if obj_mode == 'max_hvol':
-        sense = ws3.opt.SENSE_MAXIMIZE 
-        zexpr = vexpr
-    elif obj_mode == 'min_harea':
-        sense = ws3.opt.SENSE_MINIMIZE 
-        zexpr = '1.'
-    else:
-        raise ValueError('Invalid obj_mode: %s' % obj_mode)
-    if not param_funcs:
-        df_targets = pd.read_csv(target_path).set_index(['tsa', 'year'])
-        param_funcs = {}
-        param_funcs['cvcut'] = lambda bn, t: float(df_targets.loc[bn, t]['vcut']) if t <= max_tp else float(df_targets.loc[bn, max_tp]['vcut'])
-        param_funcs['cabrn'] = lambda bn, t: float(df_targets.loc[bn, t]['abrn']) if t <= max_tp else float(df_targets.loc[bn, max_tp]['abrn'])
-        param_funcs['cflw_acut_e'] = lambda bn, t: df_targets.loc[bn, t]['cflw_acut_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cflw_acut_e']
-        param_funcs['cgen_vcut_e'] = lambda bn, t: df_targets.loc[bn, t]['cgen_vcut_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cgen_vcut_e']
-        param_funcs['cgen_acut_e'] = lambda bn, t: df_targets.loc[bn, t]['cgen_vcut_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cgen_vcut_e']
-        param_funcs['cgen_abrn_e'] = lambda bn, t: df_targets.loc[bn, t]['cgen_abrn_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cgen_abrn_e']
-    coeff_funcs = {'z':partial(cmp_c_z, expr=zexpr)}
-    coeff_funcs.update({'cacut_%s' % bn:partial(cmp_c_caa, expr='1.', acodes=[harvest_acode], mask=(bn, '?', '?', '?')) 
-                        for bn in basenames})
-    coeff_funcs.update({'cvcut_%s' % bn:partial(cmp_c_caa, expr=vexpr, acodes=[harvest_acode], mask=(bn, '?', '?', '?')) 
-                        for bn in basenames})
-    T = fm.periods# [fm.base_year+(t-1)*fm.period_length for t in fm.periods]
-    cflw_e, cgen_data = {}, {}
-    #foo = {bn:{t:(bn, t+toffset) for t in T} for bn in basenames}
-    #print(T)
-    #assert False
-    #cflw_ebn = {bn:({t:param_funcs['cflw_acut_e'](bn, fm.base_year+(t-1)*fm.period_length+toffset) for t in T}, 1) for bn in basenames}
-    #cflw_e.update({'cacut_%s'%bn:cflw_ebn[bn] for bn in basenames})
-    for bn in basenames:
-        #print(df_targets.loc[bn])
-        cgen_data.update({'cvcut_%s' % bn:{'lb':{t:param_funcs['cvcut'](bn, fm.base_year+(t-1)*fm.period_length+toffset) *
-                                                 (1. - param_funcs['cgen_vcut_e'](bn, fm.base_year+(t-1)*fm.period_length+toffset))
-                                               for t in T}, 
-                                         'ub':{t:param_funcs['cvcut'](bn, fm.base_year+(t-1)*fm.period_length+toffset) for t in T}}})
-        if cacut:
-            cgen_data.update({'cacut_%s' % bn:{'lb':{t:param_funcs['cacut'](bn, fm.base_year+(t-1)*fm.period_length)*
-                                                   (1. - param_funcs['cgen_acut_e'](bn, fm.base_year+(t-1)*fm.period_length)) for t in T}, 
-                                             'ub':{t:param_funcs['cacut'](bn, fm.base_year+(t-1)*fm.period_length) for t in T}}})
-    #print(cflw_e)
-    fm._tmp = {}
-    fm._tmp['param_funcs'] = param_funcs
-    fm._tmp['cgen_data'] = cgen_data
-    return fm.add_problem(name, coeff_funcs, cflw_e, cgen_data=cgen_data, acodes=acodes, sense=sense, mask=mask)
+# def __gen_scen_base(fm, basenames, name='base', util=0.85, param_funcs=None, harvest_acode='harvest',  
+#                    tvy_name='totvol', toffset=0, obj_mode='max_hvol', 
+#                    cvcut_=None, mask=None):
+#     from functools import partial
+#     acodes = ['null', harvest_acode]  
+#     vexpr = '%s * %0.2f' % (tvy_name, util)
+#     if obj_mode == 'max_hvol':
+#         sense = ws3.opt.SENSE_MAXIMIZE 
+#         zexpr = vexpr
+#     elif obj_mode == 'min_harea':
+#         sense = ws3.opt.SENSE_MINIMIZE 
+#         zexpr = '1.'
+#     else:
+#         raise ValueError('Invalid obj_mode: %s' % obj_mode)
+#     if not param_funcs:
+#         df_targets = pd.read_csv(target_path).set_index(['tsa', 'year'])
+#         param_funcs = {}
+#         param_funcs['cvcut'] = lambda bn, t: float(df_targets.loc[bn, t]['vcut']) if t <= max_tp else float(df_targets.loc[bn, max_tp]['vcut'])
+#         param_funcs['cabrn'] = lambda bn, t: float(df_targets.loc[bn, t]['abrn']) if t <= max_tp else float(df_targets.loc[bn, max_tp]['abrn'])
+#         param_funcs['cflw_acut_e'] = lambda bn, t: df_targets.loc[bn, t]['cflw_acut_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cflw_acut_e']
+#         param_funcs['cgen_vcut_e'] = lambda bn, t: df_targets.loc[bn, t]['cgen_vcut_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cgen_vcut_e']
+#         param_funcs['cgen_acut_e'] = lambda bn, t: df_targets.loc[bn, t]['cgen_vcut_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cgen_vcut_e']
+#         param_funcs['cgen_abrn_e'] = lambda bn, t: df_targets.loc[bn, t]['cgen_abrn_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cgen_abrn_e']
+#     coeff_funcs = {'z':partial(cmp_c_z, expr=zexpr)}
+#     coeff_funcs.update({'cacut_%s' % bn:partial(cmp_c_caa, expr='1.', acodes=[harvest_acode], mask=(bn, '?', '?', '?')) 
+#                         for bn in basenames})
+#     coeff_funcs.update({'cvcut_%s' % bn:partial(cmp_c_caa, expr=vexpr, acodes=[harvest_acode], mask=(bn, '?', '?', '?')) 
+#                         for bn in basenames})
+#     T = fm.periods# [fm.base_year+(t-1)*fm.period_length for t in fm.periods]
+#     cflw_e, cgen_data = {}, {}
+#     #foo = {bn:{t:(bn, t+toffset) for t in T} for bn in basenames}
+#     #print(T)
+#     #assert False
+#     #cflw_ebn = {bn:({t:param_funcs['cflw_acut_e'](bn, fm.base_year+(t-1)*fm.period_length+toffset) for t in T}, 1) for bn in basenames}
+#     #cflw_e.update({'cacut_%s'%bn:cflw_ebn[bn] for bn in basenames})
+#     for bn in basenames:
+#         #print(df_targets.loc[bn])
+#         cgen_data.update({'cvcut_%s' % bn:{'lb':{t:param_funcs['cvcut'](bn, fm.base_year+(t-1)*fm.period_length+toffset) *
+#                                                  (1. - param_funcs['cgen_vcut_e'](bn, fm.base_year+(t-1)*fm.period_length+toffset))
+#                                                for t in T}, 
+#                                          'ub':{t:param_funcs['cvcut'](bn, fm.base_year+(t-1)*fm.period_length+toffset) for t in T}}})
+#         if cacut:
+#             cgen_data.update({'cacut_%s' % bn:{'lb':{t:param_funcs['cacut'](bn, fm.base_year+(t-1)*fm.period_length)*
+#                                                    (1. - param_funcs['cgen_acut_e'](bn, fm.base_year+(t-1)*fm.period_length)) for t in T}, 
+#                                              'ub':{t:param_funcs['cacut'](bn, fm.base_year+(t-1)*fm.period_length) for t in T}}})
+#     #print(cflw_e)
+#     fm._tmp = {}
+#     fm._tmp['param_funcs'] = param_funcs
+#     fm._tmp['cgen_data'] = cgen_data
+#     return fm.add_problem(name, coeff_funcs, cflw_e, cgen_data=cgen_data, acodes=acodes, sense=sense, mask=mask)
 
-
-def _gen_scen(fm, basenames, name, util, param_funcs, toffset=0, obj_mode='max_hvol', cacut=None, mask=None, target_path='./input/targets.csv'):
+def _gen_scen(fm, basenames, name, util, param_funcs, toffset=0, obj_mode='max_hvol', 
+              cacut=None, mask=None, target_path='./input/targets.csv', workers=1):
     dsp = {'base':_gen_scen_base}
-    return dsp[name](fm, basenames, name, util, param_funcs=param_funcs, toffset=toffset, obj_mode=obj_mode, cacut=cacut, mask=mask, target_path=target_path)
+    return dsp[name](fm, basenames, name, util, param_funcs=param_funcs, toffset=toffset, 
+                     obj_mode=obj_mode, cacut=cacut, mask=mask, target_path=target_path, workers=workers)
 
 
 # new (more general) implementation
@@ -115,7 +142,7 @@ def _gen_scen_base(fm, basenames, name,
                    util=0.85, obj_mode='max_hv', tvy_name='totvol', harvest_acode='harvest',
                    cgen_hv=None, cgen_ha=None, cgen_hv_e=None, cgen_ha_e=None, cgen_e_default=0.01,
                    cflw_hv=True, cflw_ha=True, cflw_hv_e=None, cflw_ha_e=None, cflw_e_default=0.05,
-                   mask=None):
+                   mask=None, workers=1):
     from functools import partial
     acodes = ['null', harvest_acode]
     vexpr = '%s * %0.2f' % (tvy_name, util)
@@ -158,14 +185,22 @@ def _gen_scen_base(fm, basenames, name,
                                                  'ub':{t:cgen_ha[bn, t] for t in T}}})
 
         cflw_e.update({'cflw_ha_%s' % bn:({t:cflw_ha_e[bn, t] for t in T}, 1)})
-    return fm.add_problem(name, coeff_funcs, cflw_e, cgen_data=cgen_data, acodes=acodes, sense=sense, mask=mask)
+    p = fm.add_problem(name, 
+                       coeff_funcs, 
+                       cflw_e=cflw_e, 
+                       cgen_data=cgen_data, 
+                       acodes=acodes, 
+                       sense=sense,
+                       mask=mask,
+                       workers=workers)
+    return p
 
 
 def gen_scen(fm, basenames, name, 
              util=0.85, obj_mode='max_hv', tvy_name='totvol', 
              cgen_hv=None, cgen_ha=None, cgen_hv_e=None, cgen_ha_e=None, cgen_e_default=0.01,
              cflw_hv=True, cflw_ha=True, cflw_hv_e=None, cflw_ha_e=None, cflw_e_default=0.05,
-             mask=None):
+             mask=None, workers=1):
     dsp = {'base':_gen_scen_base}
     return dsp[name](fm=fm, 
                      basenames=basenames, 
@@ -183,7 +218,8 @@ def gen_scen(fm, basenames, name,
                      cflw_hv_e=cflw_hv_e,
                      cflw_ha_e=cflw_ha_e,
                      cflw_e_default=cflw_e_default,
-                     mask=mask)
+                     mask=mask,
+                     workers=workers)
 
 
 def unhash_ij(problem):
@@ -382,15 +418,19 @@ def compile_basecodes(hdt, basenames, theme_cols):
 
 
 def schedule_harvest_optimize(fm, basenames, scenario_name='base', tvy_name='totvol', util=0.85, 
-                              p_max_hv={}, mask=None):
+                              p_max_hv={}, mask=None, workers=1):
     ########################################
     # Stage 1: find maximum even-flow harvest volumes
+    print('schedule_harvest_optimize: stage 1, generating problem')
     p = gen_scen(fm=fm, 
                  basenames=basenames, 
                  name=scenario_name, 
-                 util=util)
+                 util=util,
+                 workers=workers)
+    print('schedule_harvest_optimize: stage 1, solving problem')
     p.solve()
     sch = fm.compile_schedule(p)
+    assert sch
     fm.reset()
     fm.apply_schedule(sch, 
                       force_integral_area=True, 
@@ -407,14 +447,18 @@ def schedule_harvest_optimize(fm, basenames, scenario_name='base', tvy_name='tot
                 for bn in basenames for t in fm.periods}
     ########################################
     # Stage 2: find minimum harvest areas subject to harvest volume constraints
+    print('schedule_harvest_optimize: stage 2, generating problem')
     p = gen_scen(fm=fm,
                  basenames=basenames,
                  name=scenario_name,
                  util=util,
                  obj_mode='min_ha',
-                 cgen_hv=cgen_hv)
+                 cgen_hv=cgen_hv,
+                 workers=workers)
+    print('schedule_harvest_optimize: stage 2, solving problem')
     p.solve()
     sch = fm.compile_schedule(p)
+    assert sch
     fm.reset()
     fm.apply_schedule(sch, 
                       force_integral_area=True, 
