@@ -8,6 +8,9 @@ except:
     import pickle
 import ws3
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+
 # from concurrent.futures import ProcessPoolExecutor
 # from multiprocessing import get_context
 
@@ -130,11 +133,11 @@ def cmp_c_caa(fm, path, expr, acodes, mask=None): # product, named actions
 #     fm._tmp['cgen_data'] = cgen_data
 #     return fm.add_problem(name, coeff_funcs, cflw_e, cgen_data=cgen_data, acodes=acodes, sense=sense, mask=mask)
 
-def _gen_scen(fm, basenames, name, util, param_funcs, toffset=0, obj_mode='max_hvol', 
-              cacut=None, mask=None, target_path='./input/targets.csv', workers=1):
-    dsp = {'base':_gen_scen_base}
-    return dsp[name](fm, basenames, name, util, param_funcs=param_funcs, toffset=toffset, 
-                     obj_mode=obj_mode, cacut=cacut, mask=mask, target_path=target_path, workers=workers)
+# def _gen_scen(fm, basenames, name, util, param_funcs, toffset=0, obj_mode='max_hvol', 
+#               cacut=None, mask=None, target_path='./input/targets.csv', workers=1):
+#     dsp = {'base':_gen_scen_base}
+#     return dsp[name](fm, basenames, name, util, param_funcs=param_funcs, toffset=toffset, 
+#                      obj_mode=obj_mode, cacut=cacut, mask=mask, target_path=target_path, workers=workers)
 
 
 # new (more general) implementation
@@ -196,31 +199,491 @@ def _gen_scen_base(fm, basenames, name,
     return p
 
 
-def gen_scen(fm, basenames, name, 
-             util=0.85, obj_mode='max_hv', tvy_name='totvol', 
-             cgen_hv=None, cgen_ha=None, cgen_hv_e=None, cgen_ha_e=None, cgen_e_default=0.01,
-             cflw_hv=True, cflw_ha=True, cflw_hv_e=None, cflw_ha_e=None, cflw_e_default=0.05,
-             mask=None, workers=1):
-    dsp = {'base':_gen_scen_base}
-    return dsp[name](fm=fm, 
-                     basenames=basenames, 
-                     name=name, 
-                     util=util, 
-                     obj_mode=obj_mode, 
-                     tvy_name=tvy_name,
-                     cgen_hv=cgen_hv,
-                     cgen_ha=cgen_ha,
-                     cgen_hv_e=cgen_hv_e,
-                     cgen_ha_e=cgen_ha_e,
-                     cgen_e_default=cgen_e_default,
-                     cflw_hv=cflw_hv,
-                     cflw_ha=cflw_ha,
-                     cflw_hv_e=cflw_hv_e,
-                     cflw_ha_e=cflw_ha_e,
-                     cflw_e_default=cflw_e_default,
-                     mask=mask,
-                     workers=workers)
+# def gen_scen(fm, basenames, name, 
+#              util=0.85, obj_mode='max_hv', tvy_name='totvol', 
+#              cgen_hv=None, cgen_ha=None, cgen_hv_e=None, cgen_ha_e=None, cgen_e_default=0.01,
+#              cflw_hv=True, cflw_ha=True, cflw_hv_e=None, cflw_ha_e=None, cflw_e_default=0.05,
+#              mask=None, mgmt_unit_theme=None, workers=1):
+#     dsp = {'base':_gen_scen_base}
+#     return dsp[name](fm=fm, 
+#                      basenames=basenames, 
+#                      name=name, 
+#                      util=util, 
+#                      obj_mode=obj_mode, 
+#                      tvy_name=tvy_name,
+#                      cgen_hv=cgen_hv,
+#                      cgen_ha=cgen_ha,
+#                      cgen_hv_e=cgen_hv_e,
+#                      cgen_ha_e=cgen_ha_e,
+#                      cgen_e_default=cgen_e_default,
+#                      cflw_hv=cflw_hv,
+#                      cflw_ha=cflw_ha,
+#                      cflw_hv_e=cflw_hv_e,
+#                      cflw_ha_e=cflw_ha_e,
+#                      cflw_e_default=cflw_e_default,
+#                      mask=mask,
+#                      mgmt_unit_theme=mgmt_unit_theme,
+#                      workers=workers)
 
+# from concurrent.futures import ProcessPoolExecutor, as_completed
+
+# def _build_unit_problem_task(args):
+#     """
+#     Top-level helper for ProcessPoolExecutor to build a Problem for a single management unit.
+#     Accepts a tuple of arguments for pickle safety.
+#     """
+#     (fm, basenames, name, util, obj_mode, tvy_name,
+#      cgen_hv, cgen_ha, cgen_hv_e, cgen_ha_e, cgen_e_default,
+#      cflw_hv, cflw_ha, cflw_hv_e, cflw_ha_e, cflw_e_default,
+#      unit_theme_idx, unit, workers) = args
+
+#     dsp = {'base': _gen_scen_base}
+
+#     # Build the mask for this unit
+#     local_mask = tuple(
+#         unit if idx == unit_theme_idx else "?"
+#         for idx in range(len(fm._themes))
+#     )
+
+#     problem = dsp['base'](
+#         fm=fm,
+#         basenames=basenames,
+#         name=f"{name}_{unit}",
+#         util=util,
+#         obj_mode=obj_mode,
+#         tvy_name=tvy_name,
+#         cgen_hv=cgen_hv,
+#         cgen_ha=cgen_ha,
+#         cgen_hv_e=cgen_hv_e,
+#         cgen_ha_e=cgen_ha_e,
+#         cgen_e_default=cgen_e_default,
+#         cflw_hv=cflw_hv,
+#         cflw_ha=cflw_ha,
+#         cflw_hv_e=cflw_hv_e,
+#         cflw_ha_e=cflw_ha_e,
+#         cflw_e_default=cflw_e_default,
+#         mask=local_mask,
+#         workers=workers
+#     )
+
+#     return (unit, problem)
+
+
+# def gen_scen(
+#     fm,
+#     basenames,
+#     name,
+#     util=0.85,
+#     obj_mode='max_hv',
+#     tvy_name='totvol',
+#     cgen_hv=None,
+#     cgen_ha=None,
+#     cgen_hv_e=None,
+#     cgen_ha_e=None,
+#     cgen_e_default=0.01,
+#     cflw_hv=True,
+#     cflw_ha=True,
+#     cflw_hv_e=None,
+#     cflw_ha_e=None,
+#     cflw_e_default=0.05,
+#     mask=None,
+#     mgmt_unit_theme=None,
+#     workers=1
+# ):
+#     """
+#     Dispatcher for generating ws3 optimization problems.
+    
+#     - If mgmt_unit_theme is None:
+#         Returns a single Problem object (current behavior)
+#     - If mgmt_unit_theme is an int (theme index):
+#         Returns a dict of {unit_name: Problem}, one per management unit.
+#         Problems are generated in parallel when workers > 1.
+#     """
+#     dsp = {'base': _gen_scen_base}
+
+#     # Single-unit behavior (default)
+#     if mgmt_unit_theme is None:
+#         return dsp[name](
+#             fm=fm,
+#             basenames=basenames,
+#             name=name,
+#             util=util,
+#             obj_mode=obj_mode,
+#             tvy_name=tvy_name,
+#             cgen_hv=cgen_hv,
+#             cgen_ha=cgen_ha,
+#             cgen_hv_e=cgen_hv_e,
+#             cgen_ha_e=cgen_ha_e,
+#             cgen_e_default=cgen_e_default,
+#             cflw_hv=cflw_hv,
+#             cflw_ha=cflw_ha,
+#             cflw_hv_e=cflw_hv_e,
+#             cflw_ha_e=cflw_ha_e,
+#             cflw_e_default=cflw_e_default,
+#             mask=mask,
+#             workers=workers
+#         )
+
+#     # ----------------------------------------
+#     # Multi-unit decomposition path
+#     # ----------------------------------------
+#     unit_theme_idx = int(mgmt_unit_theme)
+#     unit_codes = fm._theme_basecodes[unit_theme_idx]
+#     print(f"gen_scen: multi-unit mode on theme {unit_theme_idx}, units={unit_codes}")
+
+#     max_outer_workers = min(len(unit_codes), workers if workers > 1 else 1)
+#     workers_per_unit = max(1, workers // max_outer_workers)
+#     problems = {}
+
+#     # Prepare arguments for top-level worker function
+#     args_list = [
+#         (
+#             fm, basenames, name, util, obj_mode, tvy_name,
+#             cgen_hv, cgen_ha, cgen_hv_e, cgen_ha_e, cgen_e_default,
+#             cflw_hv, cflw_ha, cflw_hv_e, cflw_ha_e, cflw_e_default,
+#             unit_theme_idx, unit, workers_per_unit
+#         )
+#         for unit in unit_codes
+#     ]
+
+#     if max_outer_workers > 1:
+#         with ProcessPoolExecutor(max_workers=max_outer_workers) as executor:
+#             futures = {executor.submit(_build_unit_problem_task, args): args[-2] for args in args_list}
+#             for fut in as_completed(futures):
+#                 unit, problem = fut.result()
+#                 problems[unit] = problem
+#     else:
+#         for args in args_list:
+#             unit, problem = _build_unit_problem_task(args)
+#             problems[unit] = problem
+
+#     return problems
+
+
+# def gen_scen(
+#     fm,
+#     basenames,
+#     name,
+#     util=0.85,
+#     obj_mode='max_hv',
+#     tvy_name='totvol',
+#     cgen_hv=None,
+#     cgen_ha=None,
+#     cgen_hv_e=None,
+#     cgen_ha_e=None,
+#     cgen_e_default=0.01,
+#     cflw_hv=True,
+#     cflw_ha=True,
+#     cflw_hv_e=None,
+#     cflw_ha_e=None,
+#     cflw_e_default=0.05,
+#     mask=None,
+#     mgmt_unit_theme=None,
+#     workers=1
+# ):
+#     """
+#     Dispatcher for generating ws3 optimization problems.
+    
+#     - If mgmt_unit_theme is None:
+#         Returns a single Problem object (current behavior)
+#     - If mgmt_unit_theme is an int (theme index):
+#         Returns a dict of {unit_name: Problem}, one per management unit.
+#     """
+#     dsp = {'base': _gen_scen_base}
+
+#     # Single-unit behavior (default)
+#     if mgmt_unit_theme is None:
+#         return dsp[name](
+#             fm=fm,
+#             basenames=basenames,
+#             name=name,
+#             util=util,
+#             obj_mode=obj_mode,
+#             tvy_name=tvy_name,
+#             cgen_hv=cgen_hv,
+#             cgen_ha=cgen_ha,
+#             cgen_hv_e=cgen_hv_e,
+#             cgen_ha_e=cgen_ha_e,
+#             cgen_e_default=cgen_e_default,
+#             cflw_hv=cflw_hv,
+#             cflw_ha=cflw_ha,
+#             cflw_hv_e=cflw_hv_e,
+#             cflw_ha_e=cflw_ha_e,
+#             cflw_e_default=cflw_e_default,
+#             mask=mask,
+#             workers=workers
+#         )
+
+#     # ----------------------------------------
+#     # Multi-unit decomposition path
+#     # ----------------------------------------
+#     problems = {}
+#     unit_theme_idx = int(mgmt_unit_theme)
+#     unit_codes = fm._theme_basecodes[unit_theme_idx]
+
+#     print(f"gen_scen: multi-unit mode on theme {unit_theme_idx}, units={unit_codes}")
+
+#     for unit in unit_codes:
+#         # Build mask tuple
+#         local_mask = tuple(
+#             unit if idx == unit_theme_idx else "?"
+#             for idx in range(len(fm._themes))
+#         )
+
+#         problems[unit] = dsp[name](
+#             fm=fm,
+#             basenames=basenames,
+#             name=f"{name}_{unit}",
+#             util=util,
+#             obj_mode=obj_mode,
+#             tvy_name=tvy_name,
+#             cgen_hv=cgen_hv,
+#             cgen_ha=cgen_ha,
+#             cgen_hv_e=cgen_hv_e,
+#             cgen_ha_e=cgen_ha_e,
+#             cgen_e_default=cgen_e_default,
+#             cflw_hv=cflw_hv,
+#             cflw_ha=cflw_ha,
+#             cflw_hv_e=cflw_hv_e,
+#             cflw_ha_e=cflw_ha_e,
+#             cflw_e_default=cflw_e_default,
+#             mask=local_mask,
+#             workers=workers
+#         )
+
+#     return problems
+
+
+def _build_unit_problem_task(args):
+    """
+    Top-level helper for ProcessPoolExecutor to build a Problem for a single management unit.
+    Accepts a tuple of arguments for pickle safety.
+    """
+    (fm, basenames, name, util, obj_mode, tvy_name,
+     cgen_hv, cgen_ha, cgen_hv_e, cgen_ha_e, cgen_e_default,
+     cflw_hv, cflw_ha, cflw_hv_e, cflw_ha_e, cflw_e_default,
+     unit_theme_idx, unit, workers) = args
+
+    dsp = {'base': _gen_scen_base}
+
+    # Build the mask for this unit
+    local_mask = tuple(
+        unit if idx == unit_theme_idx else "?"
+        for idx in range(len(fm._themes))
+    )
+
+    problem = dsp['base'](
+        fm=fm,
+        basenames=basenames,
+        name=f"{name}_{unit}",
+        util=util,
+        obj_mode=obj_mode,
+        tvy_name=tvy_name,
+        cgen_hv=cgen_hv,
+        cgen_ha=cgen_ha,
+        cgen_hv_e=cgen_hv_e,
+        cgen_ha_e=cgen_ha_e,
+        cgen_e_default=cgen_e_default,
+        cflw_hv=cflw_hv,
+        cflw_ha=cflw_ha,
+        cflw_hv_e=cflw_hv_e,
+        cflw_ha_e=cflw_ha_e,
+        cflw_e_default=cflw_e_default,
+        mask=local_mask,
+        workers=workers
+    )
+
+    return (unit, problem)
+
+def gen_scen(
+    fm,
+    basenames,
+    name,
+    util=0.85,
+    obj_mode='max_hv',
+    tvy_name='totvol',
+    cgen_hv=None,
+    cgen_ha=None,
+    cgen_hv_e=None,
+    cgen_ha_e=None,
+    cgen_e_default=0.01,
+    cflw_hv=True,
+    cflw_ha=True,
+    cflw_hv_e=None,
+    cflw_ha_e=None,
+    cflw_e_default=0.05,
+    mask=None,
+    mgmt_unit_theme=None,
+    workers=1
+):
+    """
+    Dispatcher for generating ws3 optimization problems.
+
+    - If mgmt_unit_theme is None:
+        Returns a single Problem object (current behavior)
+    - If mgmt_unit_theme is an int (theme index):
+        Returns a dict of {unit_name: Problem}, one per management unit.
+        Problems are generated in parallel when workers > 1.
+    """
+    dsp = {'base': _gen_scen_base}
+
+    # -------------------------------
+    # Single-unit behavior (default)
+    # -------------------------------
+    if mgmt_unit_theme is None:
+        return dsp[name](
+            fm=fm,
+            basenames=basenames,
+            name=name,
+            util=util,
+            obj_mode=obj_mode,
+            tvy_name=tvy_name,
+            cgen_hv=cgen_hv,
+            cgen_ha=cgen_ha,
+            cgen_hv_e=cgen_hv_e,
+            cgen_ha_e=cgen_ha_e,
+            cgen_e_default=cgen_e_default,
+            cflw_hv=cflw_hv,
+            cflw_ha=cflw_ha,
+            cflw_hv_e=cflw_hv_e,
+            cflw_ha_e=cflw_ha_e,
+            cflw_e_default=cflw_e_default,
+            mask=mask,
+            workers=workers
+        )
+
+    # -------------------------------
+    # Multi-unit decomposition path
+    # -------------------------------
+    unit_theme_idx = int(mgmt_unit_theme)
+    unit_codes = fm._theme_basecodes[unit_theme_idx]
+    print(f"gen_scen: multi-unit mode on theme {unit_theme_idx}, units={unit_codes}")
+
+    max_outer_workers = min(len(unit_codes), workers if workers > 1 else 1)
+    workers_per_unit = max(1, workers // max_outer_workers)
+    problems = {}
+
+    # Prepare arguments for top-level worker function
+    args_list = []
+    for unit in unit_codes:
+        # Filter cgen_hv for this unit if provided
+        local_cgen_hv = None
+        if cgen_hv is not None:
+            local_cgen_hv = {
+                k: v for k, v in cgen_hv.items() if k[0] == unit
+            }
+
+        args_list.append((
+            fm, [unit], f"{name}_{unit}", util, obj_mode, tvy_name,
+            local_cgen_hv, cgen_ha, cgen_hv_e, cgen_ha_e, cgen_e_default,
+            cflw_hv, cflw_ha, cflw_hv_e, cflw_ha_e, cflw_e_default,
+            unit_theme_idx, unit, workers_per_unit
+        ))
+
+    # Parallel or serial execution
+    if max_outer_workers > 1:
+        with ProcessPoolExecutor(max_workers=max_outer_workers) as executor:
+            futures = {executor.submit(_build_unit_problem_task, args): args[-2] for args in args_list}
+            for fut in as_completed(futures):
+                unit, problem = fut.result()
+                problems[unit] = problem
+    else:
+        for args in args_list:
+            unit, problem = _build_unit_problem_task(args)
+            problems[unit] = problem
+
+    return problems
+
+
+# def gen_scen(
+#     fm,
+#     basenames,
+#     name,
+#     util=0.85,
+#     obj_mode='max_hv',
+#     tvy_name='totvol',
+#     cgen_hv=None,
+#     cgen_ha=None,
+#     cgen_hv_e=None,
+#     cgen_ha_e=None,
+#     cgen_e_default=0.01,
+#     cflw_hv=True,
+#     cflw_ha=True,
+#     cflw_hv_e=None,
+#     cflw_ha_e=None,
+#     cflw_e_default=0.05,
+#     mask=None,
+#     mgmt_unit_theme=None,
+#     workers=1
+# ):
+#     """
+#     Dispatcher for generating ws3 optimization problems.
+    
+#     - If mgmt_unit_theme is None:
+#         Returns a single Problem object (current behavior)
+#     - If mgmt_unit_theme is an int (theme index):
+#         Returns a dict of {unit_name: Problem}, one per management unit.
+#         Problems are generated in parallel when workers > 1.
+#     """
+#     dsp = {'base': _gen_scen_base}
+
+#     # Single-unit behavior (default)
+#     if mgmt_unit_theme is None:
+#         return dsp[name](
+#             fm=fm,
+#             basenames=basenames,
+#             name=name,
+#             util=util,
+#             obj_mode=obj_mode,
+#             tvy_name=tvy_name,
+#             cgen_hv=cgen_hv,
+#             cgen_ha=cgen_ha,
+#             cgen_hv_e=cgen_hv_e,
+#             cgen_ha_e=cgen_ha_e,
+#             cgen_e_default=cgen_e_default,
+#             cflw_hv=cflw_hv,
+#             cflw_ha=cflw_ha,
+#             cflw_hv_e=cflw_hv_e,
+#             cflw_ha_e=cflw_ha_e,
+#             cflw_e_default=cflw_e_default,
+#             mask=mask,
+#             workers=workers
+#         )
+
+#     # ----------------------------------------
+#     # Multi-unit decomposition path
+#     # ----------------------------------------
+#     unit_theme_idx = int(mgmt_unit_theme)
+#     unit_codes = fm._theme_basecodes[unit_theme_idx]
+#     print(f"gen_scen: multi-unit mode on theme {unit_theme_idx}, units={unit_codes}")
+
+#     max_outer_workers = min(len(unit_codes), workers if workers > 1 else 1)
+#     workers_per_unit = max(1, workers // max_outer_workers)
+#     problems = {}
+
+#     # Prepare arguments for top-level worker function
+#     args_list = [
+#         (
+#             fm, basenames, name, util, obj_mode, tvy_name,
+#             cgen_hv, cgen_ha, cgen_hv_e, cgen_ha_e, cgen_e_default,
+#             cflw_hv, cflw_ha, cflw_hv_e, cflw_ha_e, cflw_e_default,
+#             unit_theme_idx, unit, workers_per_unit
+#         )
+#         for unit in unit_codes
+#     ]
+
+#     if max_outer_workers > 1:
+#         with ProcessPoolExecutor(max_workers=max_outer_workers) as executor:
+#             futures = {executor.submit(_build_unit_problem_task, args): args[-2] for args in args_list}
+#             for fut in as_completed(futures):
+#                 unit, problem = fut.result()
+#                 problems[unit] = problem
+#     else:
+#         for args in args_list:
+#             unit, problem = _build_unit_problem_task(args)
+#             problems[unit] = problem
+
+#     return problems
 
 def unhash_ij(problem):
     r = {}
@@ -417,58 +880,619 @@ def compile_basecodes(hdt, basenames, theme_cols):
     return basecodes
 
 
-def schedule_harvest_optimize(fm, basenames, scenario_name='base', tvy_name='totvol', util=0.85, 
-                              p_max_hv={}, mask=None, workers=1):
-    ########################################
-    # Stage 1: find maximum even-flow harvest volumes
-    print('schedule_harvest_optimize: stage 1, generating problem')
-    p = gen_scen(fm=fm, 
-                 basenames=basenames, 
-                 name=scenario_name, 
-                 util=util,
-                 workers=workers)
-    print('schedule_harvest_optimize: stage 1, solving problem')
-    p.solve()
-    sch = fm.compile_schedule(p)
-    assert sch
-    fm.reset()
-    fm.apply_schedule(sch, 
-                      force_integral_area=True, 
-                      override_operability=True,
-                      fuzzy_age=True,
-                      recourse_enabled=True,
-                      verbose=False,
-                      compile_c_ycomps=True)
-    vexpr = '%s * %0.2f' % (tvy_name, util)
-    hv_coeffs = {bn:p_max_hv[bn] if p_max_hv and isinstance(p_max_hv, dict) and bn in p_max_hv 
-                 else 1. 
-                 for bn in basenames}
-    cgen_hv = {(bn, t):fm.compile_product(t, vexpr, dtype_keys=fm.unmask((bn, '?', '?', '?'))) * hv_coeffs[bn]
-                for bn in basenames for t in fm.periods}
-    ########################################
-    # Stage 2: find minimum harvest areas subject to harvest volume constraints
-    print('schedule_harvest_optimize: stage 2, generating problem')
-    p = gen_scen(fm=fm,
-                 basenames=basenames,
-                 name=scenario_name,
-                 util=util,
-                 obj_mode='min_ha',
-                 cgen_hv=cgen_hv,
-                 workers=workers)
-    print('schedule_harvest_optimize: stage 2, solving problem')
-    p.solve()
-    sch = fm.compile_schedule(p)
-    assert sch
-    fm.reset()
-    fm.apply_schedule(sch, 
-                      force_integral_area=True, 
-                      override_operability=True,
-                      fuzzy_age=True,
-                      recourse_enabled=True,
-                      verbose=False,
-                      compile_c_ycomps=True)
-    return sch
+# def schedule_harvest_optimize(fm, basenames, scenario_name='base', tvy_name='totvol', util=0.85, 
+#                               p_max_hv={}, mask=None, mgmt_unit_theme=None, workers=1):
+#     ########################################
+#     # Stage 1: find maximum even-flow harvest volumes
+#     print('schedule_harvest_optimize: stage 1, generating problem')
+#     p = gen_scen(fm=fm, 
+#                  basenames=basenames, 
+#                  name=scenario_name, 
+#                  util=util,
+#                  mgmt_unit_theme=mgmt_unit_theme,
+#                  workers=workers)
+#     print('schedule_harvest_optimize: stage 1, solving problem')
+#     p.solve()
+#     sch = fm.compile_schedule(p)
+#     assert sch
+#     fm.reset()
+#     fm.apply_schedule(sch, 
+#                       force_integral_area=True, 
+#                       override_operability=True,
+#                       fuzzy_age=True,
+#                       recourse_enabled=True,
+#                       verbose=False,
+#                       compile_c_ycomps=True)
+#     vexpr = '%s * %0.2f' % (tvy_name, util)
+#     hv_coeffs = {bn:p_max_hv[bn] if p_max_hv and isinstance(p_max_hv, dict) and bn in p_max_hv 
+#                  else 1. 
+#                  for bn in basenames}
+#     cgen_hv = {(bn, t):fm.compile_product(t, vexpr, dtype_keys=fm.unmask((bn, '?', '?', '?'))) * hv_coeffs[bn]
+#                 for bn in basenames for t in fm.periods}
+#     ########################################
+#     # Stage 2: find minimum harvest areas subject to harvest volume constraints
+#     print('schedule_harvest_optimize: stage 2, generating problem')
+#     p = gen_scen(fm=fm,
+#                  basenames=basenames,
+#                  name=scenario_name,
+#                  util=util,
+#                  obj_mode='min_ha',
+#                  cgen_hv=cgen_hv,
+#                  mgmt_unit_theme=mgmt_unit_theme,
+#                  workers=workers)
+#     print('schedule_harvest_optimize: stage 2, solving problem')
+#     p.solve()
+#     sch = fm.compile_schedule(p)
+#     assert sch
+#     fm.reset()
+#     fm.apply_schedule(sch, 
+#                       force_integral_area=True, 
+#                       override_operability=True,
+#                       fuzzy_age=True,
+#                       recourse_enabled=True,
+#                       verbose=False,
+#                       compile_c_ycomps=True)
+#     return sch
 
+# def schedule_harvest_optimize(
+#     fm, basenames, scenario_name='base', tvy_name='totvol', util=0.85,
+#     p_max_hv=None, mask=None, mgmt_unit_theme=None, workers=1
+# ):
+#     ########################################
+#     # Stage 1: Max even-flow harvest volumes
+#     print('schedule_harvest_optimize: stage 1, generating problem')
+#     problems = gen_scen(
+#         fm=fm,
+#         basenames=basenames,
+#         name=scenario_name,
+#         util=util,
+#         mgmt_unit_theme=mgmt_unit_theme,
+#         workers=workers
+#     )
+
+#     # Normalize to dict
+#     if not isinstance(problems, dict):
+#         problems = {'_single': problems}
+
+#     # Solve all Stage 1 problems and collect schedules
+#     all_stage1_schedules = []
+#     for unit, p in problems.items():
+#         print(f"schedule_harvest_optimize: stage 1 solving for unit {unit}")
+#         p.solve()
+#         sch = fm.compile_schedule(p)
+#         assert sch
+#         all_stage1_schedules.extend(sch)
+
+#     # Merge and apply schedule to advance the model
+#     all_stage1_schedules.sort(key=lambda x: x[4])  # sort by period
+#     fm.reset()
+#     fm.apply_schedule(
+#         all_stage1_schedules,
+#         force_integral_area=True,
+#         override_operability=True,
+#         fuzzy_age=True,
+#         recourse_enabled=True,
+#         verbose=False,
+#         compile_c_ycomps=True
+#     )
+
+#     # Compute harvest volume constraint data for Stage 2
+#     vexpr = f'{tvy_name} * {util:0.2f}'
+#     hv_coeffs = {
+#         bn: p_max_hv[bn] if p_max_hv and isinstance(p_max_hv, dict) and bn in p_max_hv else 1.0
+#         for bn in basenames
+#     }
+#     cgen_hv = {
+#         (bn, t): fm.compile_product(t, vexpr, dtype_keys=fm.unmask((bn, '?', '?', '?'))) * hv_coeffs[bn]
+#         for bn in basenames for t in fm.periods
+#     }
+
+#     ########################################
+#     # Stage 2: Min harvest area subject to volume constraints
+#     print('schedule_harvest_optimize: stage 2, generating problem')
+#     problems_stage2 = gen_scen(
+#         fm=fm,
+#         basenames=basenames,
+#         name=scenario_name,
+#         util=util,
+#         obj_mode='min_ha',
+#         cgen_hv=cgen_hv,
+#         mgmt_unit_theme=mgmt_unit_theme,
+#         workers=workers
+#     )
+
+#     if not isinstance(problems_stage2, dict):
+#         problems_stage2 = {'_single': problems_stage2}
+
+#     # Solve all Stage 2 problems and collect schedules
+#     all_stage2_schedules = []
+#     for unit, p in problems_stage2.items():
+#         print(f"schedule_harvest_optimize: stage 2 solving for unit {unit}")
+#         p.solve()
+#         sch = fm.compile_schedule(p)
+#         assert sch
+#         all_stage2_schedules.extend(sch)
+
+#     # Merge and apply final schedule
+#     all_stage2_schedules.sort(key=lambda x: x[4])  # sort by period
+#     fm.reset()
+#     fm.apply_schedule(
+#         all_stage2_schedules,
+#         force_integral_area=True,
+#         override_operability=True,
+#         fuzzy_age=True,
+#         recourse_enabled=True,
+#         verbose=False,
+#         compile_c_ycomps=True
+#     )
+
+#     return all_stage2_schedules
+
+    # def schedule_harvest_optimize(
+    #     fm,
+    #     basenames,
+    #     scenario_name='base',
+    #     tvy_name='totvol',
+    #     util=0.85, 
+    #     p_max_hv={},
+    #     mask=None,
+    #     mgmt_unit_theme=None,
+    #     workers=1
+    # ):
+    #     ########################################
+    #     # Stage 1: find maximum even-flow harvest volumes
+    #     print('schedule_harvest_optimize: stage 1, generating problem')
+    #     p = gen_scen(
+    #         fm=fm, 
+    #         basenames=basenames, 
+    #         name=scenario_name, 
+    #         util=util,
+    #         mgmt_unit_theme=mgmt_unit_theme,
+    #         workers=workers
+    #     )
+
+    #     # --- Handle multi-unit dict ---
+    #     multi_unit = isinstance(p, dict)
+    #     schedules_stage1 = []
+
+    #     if multi_unit:
+    #         for unit, prob in p.items():
+    #             print(f"schedule_harvest_optimize: stage 1 solving for unit {unit}")
+    #             prob.solve()
+    #             sch = fm.compile_schedule(prob)
+    #             assert sch
+    #             schedules_stage1.extend(sch)
+
+    #         # Merge schedules by period
+    #         schedules_stage1.sort(key=lambda x: x[4])
+
+    #         # Apply combined schedule to reset forest model
+    #         fm.reset()
+    #         fm.apply_schedule(
+    #             schedules_stage1,
+    #             force_integral_area=True,
+    #             override_operability=True,
+    #             fuzzy_age=True,
+    #             recourse_enabled=True,
+    #             verbose=False,
+    #             compile_c_ycomps=True
+    #         )
+    #     else:
+    #         print('schedule_harvest_optimize: stage 1, solving problem')
+    #         p.solve()
+    #         schedules_stage1 = fm.compile_schedule(p)
+    #         assert schedules_stage1
+    #         fm.reset()
+    #         fm.apply_schedule(
+    #             schedules_stage1,
+    #             force_integral_area=True,
+    #             override_operability=True,
+    #             fuzzy_age=True,
+    #             recourse_enabled=True,
+    #             verbose=False,
+    #             compile_c_ycomps=True
+    #         )
+
+    #     # ----------------------------------------
+    #     # Build harvest volume constraints for Stage 2
+    #     # ----------------------------------------
+    #     vexpr = f'{tvy_name} * {util:0.2f}'
+    #     hv_coeffs = {
+    #         bn: p_max_hv[bn] if p_max_hv and isinstance(p_max_hv, dict) and bn in p_max_hv else 1.0
+    #         for bn in basenames
+    #     }
+    #     cgen_hv = {
+    #         (bn, t): fm.compile_product(t, vexpr, dtype_keys=fm.unmask((bn, '?', '?', '?'))) * hv_coeffs[bn]
+    #         for bn in basenames
+    #         for t in fm.periods
+    #     }
+
+    #     ########################################
+    #     # Stage 2: find minimum harvest areas subject to harvest volume constraints
+    #     print('schedule_harvest_optimize: stage 2, generating problem')
+    #     p2 = gen_scen(
+    #         fm=fm,
+    #         basenames=basenames,
+    #         name=scenario_name,
+    #         util=util,
+    #         obj_mode='min_ha',
+    #         cgen_hv=cgen_hv,
+    #         mgmt_unit_theme=mgmt_unit_theme,
+    #         workers=workers
+    #     )
+
+    #     schedules_stage2 = []
+
+    #     if multi_unit:
+    #         for unit, prob in p2.items():
+    #             print(f"schedule_harvest_optimize: stage 2 solving for unit {unit}")
+    #             prob.solve()
+    #             sch = fm.compile_schedule(prob)
+    #             assert sch
+    #             schedules_stage2.extend(sch)
+
+    #         schedules_stage2.sort(key=lambda x: x[4])
+    #         fm.reset()
+    #         fm.apply_schedule(
+    #             schedules_stage2,
+    #             force_integral_area=True,
+    #             override_operability=True,
+    #             fuzzy_age=True,
+    #             recourse_enabled=True,
+    #             verbose=False,
+    #             compile_c_ycomps=True
+    #         )
+    #         return schedules_stage2
+
+    #     else:
+    #         print('schedule_harvest_optimize: stage 2, solving problem')
+    #         p2.solve()
+    #         schedules_stage2 = fm.compile_schedule(p2)
+    #         assert schedules_stage2
+    #         fm.reset()
+    #         fm.apply_schedule(
+    #             schedules_stage2,
+    #             force_integral_area=True,
+    #             override_operability=True,
+    #             fuzzy_age=True,
+    #             recourse_enabled=True,
+    #             verbose=False,
+    #             compile_c_ycomps=True
+    #         )
+    #         return schedules_stage2
+
+# def _solve_stage(fm, problems, stage_label):
+#     schedules = []
+#     if isinstance(problems, dict):
+#         for unit, prob in problems.items():
+#             print(f"{stage_label} solving for unit {unit}")
+#             prob.solve()
+#             sch = fm.compile_schedule(prob)
+#             assert sch
+#             schedules.extend(sch)
+#     else:
+#         print(f"{stage_label}, solving problem")
+#         problems.solve()
+#         schedules = fm.compile_schedule(problems)
+#         assert schedules
+
+#     # Merge and apply
+#     schedules.sort(key=lambda x: x[4])
+#     fm.reset()
+#     fm.apply_schedule(
+#         schedules,
+#         force_integral_area=True,
+#         override_operability=True,
+#         fuzzy_age=True,
+#         recourse_enabled=True,
+#         verbose=False,
+#         compile_c_ycomps=True
+#     )
+#     return schedules
+
+
+def _solve_unit_task(args):
+    """
+    Top-level helper for ProcessPoolExecutor to solve a single Problem.
+    Returns (unit, schedule_list).
+    """
+    fm, unit, problem = args
+    print(f"Solving problem for unit {unit}")
+    problem.solve()
+    schedule = fm.compile_schedule(problem)
+    return (unit, schedule)
+
+
+def _solve_stage(fm, problems, stage_label, workers=1):
+    """
+    Solve one optimization stage for single or multi-unit problems.
+
+    Parameters
+    ----------
+    fm : ForestModel
+        The forest model instance.
+    problems : ws3.opt.Problem or dict
+        Single Problem object or dict of {unit_name: Problem}.
+    stage_label : str
+        Label printed in logs to identify the stage.
+    workers : int, optional
+        Number of cores to use for parallel solving across units. Default = 1.
+
+    Returns
+    -------
+    list
+        Flattened list of schedule tuples sorted by period.
+    """
+    schedules = []
+
+    if isinstance(problems, dict):
+        # Multi-unit mode
+        units = list(problems.keys())
+        n_units = len(units)
+        print(f"{stage_label}: solving {n_units} unit problems")
+
+        # Determine cores to use for outer parallelism
+        outer_workers = min(workers, n_units)
+
+        # Split remaining cores for solving inside each unit if supported
+        # (HiGHS internal parallelism will use up to 8 threads per solve anyway)
+        workers_per_unit = max(1, workers // n_units)
+        print(f"{stage_label}: allocating {workers_per_unit} cores per unit")
+
+        if workers > 1 and n_units > 1:
+            # Parallel solve across units
+            args_list = [(fm, unit, problems[unit]) for unit in units]
+            with ProcessPoolExecutor(max_workers=outer_workers) as executor:
+                futures = {executor.submit(_solve_unit_task, args): args[1] for args in args_list}
+                for fut in as_completed(futures):
+                    unit, schedule = fut.result()
+                    assert schedule
+                    schedules.extend(schedule)
+        else:
+            # Serial solve
+            for unit, prob in problems.items():
+                print(f"{stage_label} solving for unit {unit}")
+                prob.solve()
+                schedule = fm.compile_schedule(prob)
+                assert schedule
+                schedules.extend(schedule)
+
+    else:
+        # Single problem mode
+        print(f"{stage_label}: solving single problem")
+        problems.solve()
+        schedules = fm.compile_schedule(problems)
+        assert schedules
+
+    # Sort merged schedules by period (index 4 in tuple)
+    schedules.sort(key=lambda x: x[4])
+    return schedules
+
+# def _solve_stage(fm, problems, stage_label, workers=1):
+#     """
+#     Solve one optimization stage for single or multi-unit problems in parallel if requested.
+
+#     Parameters
+#     ----------
+#     fm : ForestModel
+#         The forest model instance (used for schedule compilation if serial).
+#     problems : ws3.opt.Problem or dict
+#         Single Problem object or dict of {unit_name: Problem}.
+#     stage_label : str
+#         Label printed in logs to identify the stage.
+#     workers : int, optional
+#         Number of cores to use for parallel solving across units. Default = 1.
+
+#     Returns
+#     -------
+#     list
+#         Flattened list of schedule tuples sorted by period.
+#     """
+#     schedules = []
+
+#     # --- Multi-unit mode ---
+#     if isinstance(problems, dict):
+#         units = list(problems.keys())
+#         n_units = len(units)
+#         print(f"{stage_label}: solving {n_units} unit problems")
+
+#         # Parallel if >1 unit and >1 worker
+#         outer_workers = min(workers, n_units)
+#         if outer_workers > 1:
+#             # Prepare (unit, problem) tuples
+#             args_list = [(unit, problems[unit]) for unit in units]
+
+#             with ProcessPoolExecutor(max_workers=outer_workers) as executor:
+#                 futures = {executor.submit(_solve_and_compile_unit, args): args[0] for args in args_list}
+#                 for fut in as_completed(futures):
+#                     unit, schedule = fut.result()
+#                     assert schedule
+#                     schedules.extend(schedule)
+#         else:
+#             # Serial solve
+#             for unit, prob in problems.items():
+#                 print(f"{stage_label} solving for unit {unit}")
+#                 prob.solve()
+#                 schedule = fm.compile_schedule(prob)
+#                 assert schedule
+#                 schedules.extend(schedule)
+
+#     else:
+#         # --- Single problem mode ---
+#         print(f"{stage_label}: solving single problem")
+#         problems.solve()
+#         schedules = fm.compile_schedule(problems)
+#         assert schedules
+
+#     # Sort merged schedules by period (index 4 in tuple)
+#     schedules.sort(key=lambda x: x[4])
+#     return schedules
+
+
+# def _solve_and_compile_unit(args):
+#     """
+#     Worker task: Solve a single unit Problem and compile its schedule.
+#     Returns (unit_name, schedule).
+#     """
+#     unit, problem = args
+#     print(f"Solving unit {unit}")
+#     problem.solve()
+#     from ws3 import forest  # local import to avoid pickling fm
+#     schedule = forest.ForestModel.compile_schedule.__func__(None, problem)  # call unbound
+#     return unit, schedule
+
+# def schedule_harvest_optimize(
+#     fm,
+#     basenames,
+#     scenario_name='base',
+#     tvy_name='totvol',
+#     util=0.85, 
+#     p_max_hv={},
+#     mask=None,
+#     mgmt_unit_theme=None,
+#     workers=1
+# ):
+#     # Stage 1
+#     print('schedule_harvest_optimize: stage 1, generating problem')
+#     p1 = gen_scen(fm=fm, basenames=basenames, name=scenario_name, util=util,
+#                   mgmt_unit_theme=mgmt_unit_theme, workers=workers)
+#     schedules_stage1 = _solve_stage(fm, p1, "schedule_harvest_optimize: stage 1", workers)
+
+#     # Build harvest volume constraints for Stage 2
+#     vexpr = f'{tvy_name} * {util:0.2f}'
+#     hv_coeffs = {bn: p_max_hv.get(bn, 1.0) for bn in basenames}
+#     cgen_hv = {
+#         (bn, t): fm.compile_product(t, vexpr, dtype_keys=fm.unmask((bn, '?', '?', '?'))) * hv_coeffs[bn]
+#         for bn in basenames for t in fm.periods
+#     }
+
+#     # Stage 2
+#     print('schedule_harvest_optimize: stage 2, generating problem')
+#     p2 = gen_scen(fm=fm, basenames=basenames, name=scenario_name, util=util,
+#                   obj_mode='min_ha', cgen_hv=cgen_hv,
+#                   mgmt_unit_theme=mgmt_unit_theme, workers=workers)
+#     schedules_stage2 = _solve_stage(fm, p2, "schedule_harvest_optimize: stage 2")
+
+#     return schedules_stage2  
+
+def schedule_harvest_optimize(
+    fm,
+    basenames,
+    scenario_name='base',
+    tvy_name='totvol',
+    util=0.85,
+    p_max_hv={},
+    mask=None,
+    mgmt_unit_theme=None,
+    workers=1
+):
+    """
+    Run a two-stage harvest scheduling optimization:
+
+    Stage 1
+        Maximize even-flow harvest volumes across the planning horizon.
+
+    Stage 2
+        Minimize harvest area subject to the harvest volume constraints
+        obtained from Stage 1.
+
+    Parameters
+    ----------
+    fm : ForestModel
+        The forest model instance to optimize.
+    basenames : list
+        List of base development type names to include.
+    scenario_name : str
+        Name of the scenario (used for problem names and reporting).
+    tvy_name : str
+        Name of the output used to measure harvest volume (objective).
+    util : float
+        Utilization factor (0.0 - 1.0) applied to volume outputs.
+    p_max_hv : dict
+        Optional dict mapping basename → scaling factor for harvest volume limits.
+    mask : tuple or None
+        Optional mask for filtering development types.
+    mgmt_unit_theme : int or None
+        Optional theme index for per-management-unit decomposition.
+    workers : int
+        Number of CPU cores to use for parallel problem generation.
+
+    Returns
+    -------
+    list
+        Compiled Stage 2 schedule as a list of tuples sorted by period.
+    """
+    ########################################
+    # Stage 1: Maximize harvest volume (even-flow)
+    ########################################
+    print('schedule_harvest_optimize: stage 1, generating problem')
+    p1 = gen_scen(
+        fm=fm,
+        basenames=basenames,
+        name=scenario_name,
+        util=util,
+        mgmt_unit_theme=mgmt_unit_theme,
+        workers=workers
+    )
+
+    schedules_stage1 = _solve_stage(fm, p1, "schedule_harvest_optimize: stage 1", workers)
+
+    # --- Reset and apply Stage 1 schedule to forest model ---
+    fm.reset()
+    fm.apply_schedule(
+        schedules_stage1,
+        force_integral_area=True,
+        override_operability=True,
+        fuzzy_age=True,
+        recourse_enabled=True,
+        verbose=False,
+        compile_c_ycomps=True
+    )
+
+    ########################################
+    # Build harvest volume constraints for Stage 2
+    ########################################
+    vexpr = f"{tvy_name} * {util:0.2f}"
+    hv_coeffs = {bn: p_max_hv.get(bn, 1.0) for bn in basenames}
+    cgen_hv = {
+        (bn, t): fm.compile_product(
+            t, vexpr,
+            dtype_keys=fm.unmask((bn, '?', '?', '?'))
+        ) * hv_coeffs[bn]
+        for bn in basenames
+        for t in fm.periods
+    }
+
+    ########################################
+    # Stage 2: Minimize harvest area
+    ########################################
+    print('schedule_harvest_optimize: stage 2, generating problem')
+    p2 = gen_scen(
+        fm=fm,
+        basenames=basenames,
+        name=scenario_name,
+        util=util,
+        obj_mode='min_ha',
+        cgen_hv=cgen_hv,
+        mgmt_unit_theme=mgmt_unit_theme,
+        workers=workers
+    )
+
+    schedules_stage2 = _solve_stage(fm, p2, "schedule_harvest_optimize: stage 2", workers)
+
+    # --- Reset and apply Stage 2 schedule ---
+    fm.reset()
+    fm.apply_schedule(
+        schedules_stage2,
+        force_integral_area=True,
+        override_operability=True,
+        fuzzy_age=True,
+        recourse_enabled=True,
+        verbose=False,
+        compile_c_ycomps=True
+    )
+
+    return schedules_stage2
 
 def schedule_harvest_areacontrol(fm, period=None, acode='harvest', util=0.85, 
                                  target_scalefactors=None,
@@ -562,4 +1586,5 @@ def unpickle_forestmodel(scenario_name, basename):
 
 
 def unpickle_schedule(scenario_name, basename):
+    return pickle.load(open('dat/out/%s/%s_%s_sch.pkl' % (scenario_name, scenario_name, basename), 'rb'))
     return pickle.load(open('dat/out/%s/%s_%s_sch.pkl' % (scenario_name, scenario_name, basename), 'rb'))
