@@ -532,7 +532,7 @@ def _solve_stage(fm, problems, stage_label, workers=1, warm_starts=None):
     else:
         # --- Single problem mode ---
         print(f"{stage_label}: solving single problem")
-        ws_vec = warm_starts if warm_starts else None
+        ws_vec = warm_starts if warm_starts is not None and warm_starts.any() else None
         problems.solve(threads=0, warm_start=ws_vec)
         schedules = fm.compile_schedule(problems)
         assert schedules
