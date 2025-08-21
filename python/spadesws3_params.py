@@ -137,11 +137,16 @@ def simulate_harvest(fm, basenames, year,
                      mode='optimize', 
                      target_scalefactors=None,
                      mask_area_thresh=0.,
-                     verbose=False):
+                     verbose=False, 
+                     mgmt_unit_theme=None,
+                     workers=1):
     bootstrap_areas(fm, basenames, tif_path, hdt, year, new_dts=False)
     fm.reset()
     if mode == 'optimize':
-        schedule_harvest_optimize(fm, basenames, p_max_hv=target_scalefactors)
+        # schedule_harvest_optimize(fm, basenames, p_max_hv=target_scalefactors,
+        #                           mgmt_unit_theme=mgmt_unit_theme, workers=workers)
+        profile_schedule_harvest_optimize(fm, basenames, target_scalefactors, 
+                                          mgmt_unit_theme, workers)
     elif mode == 'areacontrol':
         schedule_harvest_areacontrol(fm, 
                                      target_scalefactors=target_scalefactors,
@@ -151,4 +156,27 @@ def simulate_harvest(fm, basenames, year,
         raise ValueError('Bad mode value')
     sda(fm, basenames, 1, tif_path, hdt, sda_mode=sda_mode, verbose=verbose)
 
+def profile_schedule_harvest_optimize(fm, basenames, target_scalefactors, 
+                                      mgmt_unit_theme, workers):
+    """
+    Profile schedule_harvest_optimize() and print the 20 slowest functions.
+    """
+    import cProfile
+    import io
+    import pstats
+    pr = cProfile.Profile()
+    pr.enable()
 
+    # ---- Run the actual function ----
+    result = schedule_harvest_optimize(fm, basenames, p_max_hv=target_scalefactors, 
+                                       mgmt_unit_theme=mgmt_unit_theme, workers=workers)
+
+    pr.disable()
+
+    # ---- Print top 20 functions by cumulative time ----
+    s = io.StringIO()
+    ps = pstats.Stats(pr, stream=s).sort_stats('cumtime')
+    ps.print_stats(20)
+    print(s.getvalue())
+
+    return result

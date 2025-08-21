@@ -8,6 +8,9 @@ except:
     import pickle
 import ws3
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+
 def read_basenames(path):
     return [line.lower().strip().split(' ')[0] 
         for line in open(path, 'r') if not line.startswith('#')]
@@ -24,7 +27,6 @@ def cmp_c_z(fm, path, expr):
             result += fm.compile_product(t, expr, d['acode'], [d['dtk']], d['age'], coeff=False)
     return result
 
-
 def cmp_c_cflw(fm, path, expr, mask=None): # product, all harvest actions
     """
     Compile flow constraint coefficient (given ForestModel instance, 
@@ -37,7 +39,6 @@ def cmp_c_cflw(fm, path, expr, mask=None): # product, all harvest actions
         if fm.is_harvest(d['acode']):
             result[t] = fm.compile_product(t, expr, d['acode'], [d['dtk']], d['age'], coeff=False)
     return result
-
 
 def cmp_c_caa(fm, path, expr, acodes, mask=None): # product, named actions
     """
@@ -52,70 +53,11 @@ def cmp_c_caa(fm, path, expr, acodes, mask=None): # product, named actions
             result[t] = fm.compile_product(t, expr, d['acode'], [d['dtk']], d['age'], coeff=False)
     return result
 
-
-def __gen_scen_base(fm, basenames, name='base', util=0.85, param_funcs=None, harvest_acode='harvest',  
-                   tvy_name='totvol', toffset=0, obj_mode='max_hvol', 
-                   cvcut_=None, mask=None):
-    from functools import partial
-    acodes = ['null', harvest_acode]  
-    vexpr = '%s * %0.2f' % (tvy_name, util)
-    if obj_mode == 'max_hvol':
-        sense = ws3.opt.SENSE_MAXIMIZE 
-        zexpr = vexpr
-    elif obj_mode == 'min_harea':
-        sense = ws3.opt.SENSE_MINIMIZE 
-        zexpr = '1.'
-    else:
-        raise ValueError('Invalid obj_mode: %s' % obj_mode)
-    if not param_funcs:
-        df_targets = pd.read_csv(target_path).set_index(['tsa', 'year'])
-        param_funcs = {}
-        param_funcs['cvcut'] = lambda bn, t: float(df_targets.loc[bn, t]['vcut']) if t <= max_tp else float(df_targets.loc[bn, max_tp]['vcut'])
-        param_funcs['cabrn'] = lambda bn, t: float(df_targets.loc[bn, t]['abrn']) if t <= max_tp else float(df_targets.loc[bn, max_tp]['abrn'])
-        param_funcs['cflw_acut_e'] = lambda bn, t: df_targets.loc[bn, t]['cflw_acut_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cflw_acut_e']
-        param_funcs['cgen_vcut_e'] = lambda bn, t: df_targets.loc[bn, t]['cgen_vcut_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cgen_vcut_e']
-        param_funcs['cgen_acut_e'] = lambda bn, t: df_targets.loc[bn, t]['cgen_vcut_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cgen_vcut_e']
-        param_funcs['cgen_abrn_e'] = lambda bn, t: df_targets.loc[bn, t]['cgen_abrn_e'] if t <= max_tp else df_targets.loc[bn, max_tp]['cgen_abrn_e']
-    coeff_funcs = {'z':partial(cmp_c_z, expr=zexpr)}
-    coeff_funcs.update({'cacut_%s' % bn:partial(cmp_c_caa, expr='1.', acodes=[harvest_acode], mask=(bn, '?', '?', '?')) 
-                        for bn in basenames})
-    coeff_funcs.update({'cvcut_%s' % bn:partial(cmp_c_caa, expr=vexpr, acodes=[harvest_acode], mask=(bn, '?', '?', '?')) 
-                        for bn in basenames})
-    T = fm.periods# [fm.base_year+(t-1)*fm.period_length for t in fm.periods]
-    cflw_e, cgen_data = {}, {}
-    #foo = {bn:{t:(bn, t+toffset) for t in T} for bn in basenames}
-    #print(T)
-    #assert False
-    #cflw_ebn = {bn:({t:param_funcs['cflw_acut_e'](bn, fm.base_year+(t-1)*fm.period_length+toffset) for t in T}, 1) for bn in basenames}
-    #cflw_e.update({'cacut_%s'%bn:cflw_ebn[bn] for bn in basenames})
-    for bn in basenames:
-        #print(df_targets.loc[bn])
-        cgen_data.update({'cvcut_%s' % bn:{'lb':{t:param_funcs['cvcut'](bn, fm.base_year+(t-1)*fm.period_length+toffset) *
-                                                 (1. - param_funcs['cgen_vcut_e'](bn, fm.base_year+(t-1)*fm.period_length+toffset))
-                                               for t in T}, 
-                                         'ub':{t:param_funcs['cvcut'](bn, fm.base_year+(t-1)*fm.period_length+toffset) for t in T}}})
-        if cacut:
-            cgen_data.update({'cacut_%s' % bn:{'lb':{t:param_funcs['cacut'](bn, fm.base_year+(t-1)*fm.period_length)*
-                                                   (1. - param_funcs['cgen_acut_e'](bn, fm.base_year+(t-1)*fm.period_length)) for t in T}, 
-                                             'ub':{t:param_funcs['cacut'](bn, fm.base_year+(t-1)*fm.period_length) for t in T}}})
-    #print(cflw_e)
-    fm._tmp = {}
-    fm._tmp['param_funcs'] = param_funcs
-    fm._tmp['cgen_data'] = cgen_data
-    return fm.add_problem(name, coeff_funcs, cflw_e, cgen_data=cgen_data, acodes=acodes, sense=sense, mask=mask)
-
-
-def _gen_scen(fm, basenames, name, util, param_funcs, toffset=0, obj_mode='max_hvol', cacut=None, mask=None, target_path='./input/targets.csv'):
-    dsp = {'base':_gen_scen_base}
-    return dsp[name](fm, basenames, name, util, param_funcs=param_funcs, toffset=toffset, obj_mode=obj_mode, cacut=cacut, mask=mask, target_path=target_path)
-
-
-# new (more general) implementation
 def _gen_scen_base(fm, basenames, name,
                    util=0.85, obj_mode='max_hv', tvy_name='totvol', harvest_acode='harvest',
                    cgen_hv=None, cgen_ha=None, cgen_hv_e=None, cgen_ha_e=None, cgen_e_default=0.01,
                    cflw_hv=True, cflw_ha=True, cflw_hv_e=None, cflw_ha_e=None, cflw_e_default=0.05,
-                   mask=None):
+                   mask=None, workers=1):
     from functools import partial
     acodes = ['null', harvest_acode]
     vexpr = '%s * %0.2f' % (tvy_name, util)
@@ -158,34 +100,202 @@ def _gen_scen_base(fm, basenames, name,
                                                  'ub':{t:cgen_ha[bn, t] for t in T}}})
 
         cflw_e.update({'cflw_ha_%s' % bn:({t:cflw_ha_e[bn, t] for t in T}, 1)})
-    return fm.add_problem(name, coeff_funcs, cflw_e, cgen_data=cgen_data, acodes=acodes, sense=sense, mask=mask)
+    p = fm.add_problem(name, 
+                       coeff_funcs, 
+                       cflw_e=cflw_e, 
+                       cgen_data=cgen_data, 
+                       acodes=acodes, 
+                       sense=sense,
+                       mask=mask,
+                       workers=workers)
+    return p
 
+def _build_unit_problem_task(args):
+    """
+    Worker function for ProcessPoolExecutor to build a Problem for a single management unit.
 
-def gen_scen(fm, basenames, name, 
-             util=0.85, obj_mode='max_hv', tvy_name='totvol', 
-             cgen_hv=None, cgen_ha=None, cgen_hv_e=None, cgen_ha_e=None, cgen_e_default=0.01,
-             cflw_hv=True, cflw_ha=True, cflw_hv_e=None, cflw_ha_e=None, cflw_e_default=0.05,
-             mask=None):
-    dsp = {'base':_gen_scen_base}
-    return dsp[name](fm=fm, 
-                     basenames=basenames, 
-                     name=name, 
-                     util=util, 
-                     obj_mode=obj_mode, 
-                     tvy_name=tvy_name,
-                     cgen_hv=cgen_hv,
-                     cgen_ha=cgen_ha,
-                     cgen_hv_e=cgen_hv_e,
-                     cgen_ha_e=cgen_ha_e,
-                     cgen_e_default=cgen_e_default,
-                     cflw_hv=cflw_hv,
-                     cflw_ha=cflw_ha,
-                     cflw_hv_e=cflw_hv_e,
-                     cflw_ha_e=cflw_ha_e,
-                     cflw_e_default=cflw_e_default,
-                     mask=mask)
+    Parameters
+    ----------
+    args : tuple
+        (fm, basenames, name, util, obj_mode, tvy_name,
+         cgen_hv, cgen_ha, cgen_hv_e, cgen_ha_e, cgen_e_default,
+         cflw_hv, cflw_ha, cflw_hv_e, cflw_ha_e, cflw_e_default,
+         unit_theme_idx, unit, workers)
 
+    Returns
+    -------
+    tuple
+        (unit_name, ws3.opt.Problem)
+    """
+    (fm, basenames, name, util, obj_mode, tvy_name,
+     cgen_hv, cgen_ha, cgen_hv_e, cgen_ha_e, cgen_e_default,
+     cflw_hv, cflw_ha, cflw_hv_e, cflw_ha_e, cflw_e_default,
+     unit_theme_idx, unit, workers) = args
 
+    dsp = {'base': _gen_scen_base}
+
+    # Compute mask for this unit
+    local_mask = tuple(
+        unit if idx == unit_theme_idx else "?"
+        for idx in range(len(fm._themes))
+    )
+
+    # Build the Problem for this unit
+    problem = dsp['base'](
+        fm=fm,
+        basenames=[unit],  # Only this unit's base
+        name=f"{name}_{unit}",
+        util=util,
+        obj_mode=obj_mode,
+        tvy_name=tvy_name,
+        cgen_hv=cgen_hv,
+        cgen_ha=cgen_ha,
+        cgen_hv_e=cgen_hv_e,
+        cgen_ha_e=cgen_ha_e,
+        cgen_e_default=cgen_e_default,
+        cflw_hv=cflw_hv,
+        cflw_ha=cflw_ha,
+        cflw_hv_e=cflw_hv_e,
+        cflw_ha_e=cflw_ha_e,
+        cflw_e_default=cflw_e_default,
+        mask=local_mask,
+        workers=workers
+    )
+
+    return (unit, problem)
+
+def gen_scen(
+    fm,
+    basenames,
+    name,
+    util=0.85,
+    obj_mode='max_hv',
+    tvy_name='totvol',
+    cgen_hv=None,
+    cgen_ha=None,
+    cgen_hv_e=None,
+    cgen_ha_e=None,
+    cgen_e_default=0.01,
+    cflw_hv=True,
+    cflw_ha=True,
+    cflw_hv_e=None,
+    cflw_ha_e=None,
+    cflw_e_default=0.05,
+    mask=None,
+    mgmt_unit_theme=None,
+    workers=1
+):
+    """
+    Dispatcher for generating ws3 optimization problems.
+
+    Parameters
+    ----------
+    fm : ForestModel
+        Forest model instance to generate problems from.
+    basenames : list
+        List of base development type names to include (typically per-unit).
+    name : str
+        Scenario name.
+    util : float
+        Utilization factor for volume outputs.
+    obj_mode : str
+        'max_hv' or 'min_ha' objective.
+    tvy_name : str
+        Output name used for harvest volume.
+    cgen_hv : dict or None
+        General constraints (harvest volume) as {(basename, t): value}.
+    cgen_ha : dict or None
+        General constraints (harvest area).
+    cgen_hv_e, cgen_ha_e : dict or None
+        Even-flow epsilon definitions for volume/area.
+    cgen_e_default : float
+        Default epsilon for general constraints.
+    cflw_hv, cflw_ha : bool
+        Whether to include flow constraints on harvest volume or area.
+    cflw_hv_e, cflw_ha_e : dict or None
+        Epsilon dictionaries for flow constraints.
+    cflw_e_default : float
+        Default epsilon for flow constraints.
+    mask : tuple or None
+        Optional mask for filtering development types.
+    mgmt_unit_theme : int or None
+        Theme index for per-management-unit decomposition.
+    workers : int
+        Number of CPU cores to use for problem generation.
+
+    Returns
+    -------
+    ws3.opt.Problem or dict
+        Single Problem (default) or dict of {unit_name: Problem} if mgmt_unit_theme is specified.
+    """
+    dsp = {'base': _gen_scen_base}
+
+    # --- Single-unit behavior ---
+    if mgmt_unit_theme is None:
+        return dsp[name](
+            fm=fm,
+            basenames=basenames,
+            name=name,
+            util=util,
+            obj_mode=obj_mode,
+            tvy_name=tvy_name,
+            cgen_hv=cgen_hv,
+            cgen_ha=cgen_ha,
+            cgen_hv_e=cgen_hv_e,
+            cgen_ha_e=cgen_ha_e,
+            cgen_e_default=cgen_e_default,
+            cflw_hv=cflw_hv,
+            cflw_ha=cflw_ha,
+            cflw_hv_e=cflw_hv_e,
+            cflw_ha_e=cflw_ha_e,
+            cflw_e_default=cflw_e_default,
+            mask=mask,
+            workers=workers
+        )
+
+    # --- Multi-unit decomposition ---
+    unit_theme_idx = int(mgmt_unit_theme)
+    unit_codes = fm._theme_basecodes[unit_theme_idx]
+    print(f"gen_scen: multi-unit mode on theme {unit_theme_idx}, units={unit_codes}")
+
+    max_outer_workers = min(len(unit_codes), workers if workers > 1 else 1)
+    workers_per_unit = max(1, workers // max_outer_workers)
+    problems = {}
+
+    args_list = []
+    for unit in unit_codes:
+        # --- Filter cgen_hv for this unit ---
+        if cgen_hv is not None:
+            unit_cgen_hv = {
+                (bn, t): val
+                for (bn, t), val in cgen_hv.items()
+                if bn == unit
+            }
+        else:
+            unit_cgen_hv = None
+
+        # Build args tuple
+        args_list.append((
+            fm, basenames, name, util, obj_mode, tvy_name,
+            unit_cgen_hv, cgen_ha, cgen_hv_e, cgen_ha_e, cgen_e_default,
+            cflw_hv, cflw_ha, cflw_hv_e, cflw_ha_e, cflw_e_default,
+            unit_theme_idx, unit, workers_per_unit
+        ))
+
+    # Launch tasks in parallel if requested
+    if max_outer_workers > 1:
+        with ProcessPoolExecutor(max_workers=max_outer_workers) as executor:
+            futures = {executor.submit(_build_unit_problem_task, args): args[17] for args in args_list}
+            for fut in as_completed(futures):
+                unit, problem = fut.result()
+                problems[unit] = problem
+    else:
+        for args in args_list:
+            unit, problem = _build_unit_problem_task(args)
+            problems[unit] = problem
+
+    return problems
+    
 def unhash_ij(problem):
     r = {}
     for i, tree in problem.trees.items():
@@ -194,13 +304,10 @@ def unhash_ij(problem):
             r['x_%i' % hash((i, j))] = i, j
     return r
 
-
 def bootstrap_themes(fm, theme_cols=['theme0', 'theme1', 'theme2', 'theme3'], 
                      basecodes=[[], [], [], []], aggs=[{}, {}, {}, {}], verbose=False):
     for ti, t in enumerate(theme_cols):
         fm.add_theme(t, basecodes=basecodes[ti], aggs=aggs[ti])
-    #fm.nthemes = len(theme_cols)
-
     
 def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
     print('bootstrap_areas', basenames)
@@ -231,33 +338,22 @@ def bootstrap_areas(fm, basenames, rst_path, hdt, year=None, new_dts=True):
 
 def bootstrap_yields(fm, yld_path, spcode='canfi_species', 
                      x_max=350, period_length=10., tvy_name='totvol', x_unit='years'):
-    #print('yyy', yld_path)
     au_table = pd.read_csv('%s/au_table.csv' % yld_path).set_index('au_id')
     curve_table = pd.read_csv('%s/curve_table.csv' % yld_path)
     curve_points_table = pd.read_csv('%s/curve_points_table.csv' % yld_path).set_index('curve_id')
     print(au_table.shape)
-    #return au_table
     for au_id, au_row in au_table.iterrows():
-        #print()
-        #species_code = _canfi_map[au_row.canfi_species]
-        #yname = 'spcvol_%s' % species_code
         yname = 's%04d' % int(au_row.canfi_species)
-        #print()
-        #print(au_id, yname)
-        #for is_managed in (0, 1):
         for is_managed in [0]:
             curve_id = au_row.unmanaged_curve_id if not is_managed else au_row.managed_curve_id
             mask = ('?', '?', str(curve_id), '?')
-            #print(au_id, is_managed, curve_id, mask)
             dt_keys = fm.unmask(mask)
             if not dt_keys: continue
             points = [(r.x, r.y) for _, r in curve_points_table.loc[curve_id].iterrows() if not r.x % period_length and r.x <= x_max]
             c = fm.register_curve(ws3.core.Curve(yname, points=points, type='a', is_volume=True, xmax=fm.max_age, period_length=period_length))
-            #print()
             fm.yields.append((mask, 'a', [(yname, c)]))
             fm.ynames.add(yname)
             for dtk in dt_keys: 
-                #print(au_id, is_managed, curve_id, mask, yname, dtk)
                 fm.dtypes[dtk].add_ycomp('a', yname, c)
     # add total volume curve ###
     expr = '_SUM(%s)' % ', '.join(fm.ynames)
@@ -292,7 +388,6 @@ def bootstrap_yields_(fm, yld_path, theme_cols=['AU', 'LDSPP'], spcode='SPCode',
     fm.ynames.add(tvy_name)
     for dtk in fm.dtypes.keys(): fm.dtypes[dtk].add_ycomp('c', tvy_name, expr)
 
-
 def bootstrap_actions(fm, action_params):
     for acode in action_params:
         ap = action_params[acode]
@@ -307,7 +402,6 @@ def bootstrap_actions(fm, action_params):
             for age in range(1, fm.max_age):
                 if not dt.is_operable(acode, 1, age): continue
                 fm.dtypes[dtk].transitions[acode, age] = target
-
                 
 def bootstrap_forestmodel(basenames, model_name, model_path, base_year, yld_path, tif_path, horizon, 
                           period_length, max_age, basecodes, action_params, hdt,
@@ -332,13 +426,10 @@ def bootstrap_forestmodel(basenames, model_name, model_path, base_year, yld_path
     fm.grow()
     return fm
 
-
 def clean_shapefiles(basenames, gdb_path, shp_path, snk_epsg, prop_names, prop_types, tolerance, update_area_prop=''):
     import pathlib
     import fiona
     from ws3.common import clean_vector_data
-    #from os import listdir, remove
-    #from os.path import isfile, join
     for bn in basenames:
         print('cleaning GDB', gdb_path(bn))
         if not pathlib.Path(shp_path(bn)).exists(): 
@@ -351,8 +442,7 @@ def clean_shapefiles(basenames, gdb_path, shp_path, snk_epsg, prop_names, prop_t
             print('Polygons in original dataset', len(src0))
             print('Polygons in clean dataset', len(src1))
             print('Uncleanable polygons', len(src2))
-
-            
+          
 def rasterize_inventory(basenames, shp_path, tif_path, hdt_path, theme_cols, age_col, period_length, base_year,
                         cap_age=None, d=100., verbose=True):
     hdt = {}
@@ -369,7 +459,6 @@ def rasterize_inventory(basenames, shp_path, tif_path, hdt_path, theme_cols, age
         pickle.dump(hdt[bn], open('%s/hdt_%s.pkl' % (hdt_path, bn), 'wb'))
     return hdt
 
-
 def compile_basecodes(hdt, basenames, theme_cols):
     import numpy as np
     bc1 = {bn:[list(np.unique(x)) for x in zip(*hdt[bn].values())] for bn in basenames}
@@ -380,51 +469,221 @@ def compile_basecodes(hdt, basenames, theme_cols):
     basecodes = [list(bc2[i]) for i in range(len(theme_cols))]
     return basecodes
 
+def _solve_stage(fm, problems, stage_label, workers=1, warm_starts=None):
+    """
+    Solve one optimization stage for single or multi-unit problems in parallel if requested.
 
-def schedule_harvest_optimize(fm, basenames, scenario_name='base', tvy_name='totvol', util=0.85, 
-                              p_max_hv={}, mask=None):
-    ########################################
-    # Stage 1: find maximum even-flow harvest volumes
-    p = gen_scen(fm=fm, 
-                 basenames=basenames, 
-                 name=scenario_name, 
-                 util=util)
-    p.solve()
-    sch = fm.compile_schedule(p)
-    fm.reset()
-    fm.apply_schedule(sch, 
-                      force_integral_area=True, 
-                      override_operability=True,
-                      fuzzy_age=True,
-                      recourse_enabled=True,
-                      verbose=False,
-                      compile_c_ycomps=True)
-    vexpr = '%s * %0.2f' % (tvy_name, util)
-    hv_coeffs = {bn:p_max_hv[bn] if p_max_hv and isinstance(p_max_hv, dict) and bn in p_max_hv 
-                 else 1. 
-                 for bn in basenames}
-    cgen_hv = {(bn, t):fm.compile_product(t, vexpr, dtype_keys=fm.unmask((bn, '?', '?', '?'))) * hv_coeffs[bn]
-                for bn in basenames for t in fm.periods}
-    ########################################
-    # Stage 2: find minimum harvest areas subject to harvest volume constraints
-    p = gen_scen(fm=fm,
-                 basenames=basenames,
-                 name=scenario_name,
-                 util=util,
-                 obj_mode='min_ha',
-                 cgen_hv=cgen_hv)
-    p.solve()
-    sch = fm.compile_schedule(p)
-    fm.reset()
-    fm.apply_schedule(sch, 
-                      force_integral_area=True, 
-                      override_operability=True,
-                      fuzzy_age=True,
-                      recourse_enabled=True,
-                      verbose=False,
-                      compile_c_ycomps=True)
-    return sch
+    Parameters
+    ----------
+    fm : ForestModel
+        The forest model instance (used for schedule compilation if serial).
+    problems : ws3.opt.Problem or dict
+        Single Problem object or dict of {unit_name: Problem}.
+    stage_label : str
+        Label printed in logs to identify the stage.
+    workers : int, optional
+        Number of cores to use for parallel solving across units. Default = 1.
+    warm_starts : dict[str, list[float]] or list[float] or None
+        Optional warm start solutions:
+            - For multi-unit: {unit_name: col_value_list}
+            - For single-unit: list of col values
+            - None to disable warm starts
 
+    Returns
+    -------
+    list
+        Flattened list of schedule tuples sorted by period.
+    """
+    schedules = []
+
+    # --- Multi-unit mode ---
+    if isinstance(problems, dict):
+        units = list(problems.keys())
+        n_units = len(units)
+        print(f"{stage_label}: solving {n_units} unit problems")
+
+        # Parallel if >1 unit and >1 worker
+        outer_workers = min(workers, n_units)
+        if outer_workers > 1:
+            # Prepare (unit, problem, warm_start_vector) tuples
+            args_list = []
+            for unit in units:
+                ws_vec = warm_starts[unit] if warm_starts and unit in warm_starts else None
+                args_list.append((fm, unit, problems[unit], ws_vec))
+
+            with ProcessPoolExecutor(max_workers=outer_workers) as executor:
+                futures = {
+                    executor.submit(_solve_unit_task_with_warm_start, args): args[1] for args in args_list
+                }
+                for fut in as_completed(futures):
+                    unit, schedule = fut.result()
+                    assert schedule
+                    schedules.extend(schedule)
+        else:
+            # Serial solve
+            for unit, prob in problems.items():
+                ws_vec = warm_starts[unit] if warm_starts and unit in warm_starts else None
+                print(f"{stage_label} solving for unit {unit}")
+                prob.solve(threads=0, warm_start=ws_vec)
+                schedule = fm.compile_schedule(prob)
+                assert schedule
+                schedules.extend(schedule)
+
+    else:
+        # --- Single problem mode ---
+        print(f"{stage_label}: solving single problem")
+        ws_vec = warm_starts if warm_starts is not None and warm_starts.any() else None
+        problems.solve(threads=0, warm_start=ws_vec)
+        schedules = fm.compile_schedule(problems)
+        assert schedules
+
+    # Sort merged schedules by period (index 4 in tuple)
+    schedules.sort(key=lambda x: x[4])
+    return schedules
+
+def _solve_unit_task_with_warm_start(args):
+    """
+    Top-level helper for ProcessPoolExecutor to solve a single Problem with optional warm start.
+    Returns (unit_name, schedule_list).
+    """
+    fm, unit, problem, warm_start = args
+    print(f"Solving problem for unit {unit} (warm start: {warm_start is not None})")
+    problem.solve(threads=0, warm_start=warm_start)
+    schedule = fm.compile_schedule(problem)
+    return (unit, schedule)
+
+def schedule_harvest_optimize(
+    fm,
+    basenames,
+    scenario_name='base',
+    tvy_name='totvol',
+    util=0.85,
+    p_max_hv={},
+    mask=None,
+    mgmt_unit_theme=None,
+    workers=1
+):
+    """
+    Run a two-stage harvest scheduling optimization:
+
+    Stage 1
+        Maximize even-flow harvest volumes across the planning horizon.
+
+    Stage 2
+        Minimize harvest area subject to the harvest volume constraints
+        obtained from Stage 1.
+
+    Parameters
+    ----------
+    fm : ForestModel
+        The forest model instance to optimize.
+    basenames : list
+        List of base development type names to include.
+    scenario_name : str
+        Name of the scenario (used for problem names and reporting).
+    tvy_name : str
+        Name of the output used to measure harvest volume (objective).
+    util : float
+        Utilization factor (0.0 - 1.0) applied to volume outputs.
+    p_max_hv : dict
+        Optional dict mapping basename → scaling factor for harvest volume limits.
+    mask : tuple or None
+        Optional mask for filtering development types.
+    mgmt_unit_theme : int or None
+        Optional theme index for per-management-unit decomposition.
+    workers : int
+        Number of CPU cores to use for parallel problem generation.
+
+    Returns
+    -------
+    list
+        Compiled Stage 2 schedule as a list of tuples sorted by period.
+    """
+    ########################################
+    # Stage 1: Maximize harvest volume (even-flow)
+    ########################################
+    print('schedule_harvest_optimize: stage 1, generating problem')
+    p1 = gen_scen(
+        fm=fm,
+        basenames=basenames,
+        name=scenario_name,
+        util=util,
+        mgmt_unit_theme=mgmt_unit_theme,
+        workers=workers
+    )
+
+    schedules_stage1 = _solve_stage(
+        fm, p1, "schedule_harvest_optimize: stage 1", workers
+    )
+
+    # --- Build warm start vectors for Stage 2 ---
+    if isinstance(p1, dict):
+        warm_starts = {
+            unit: np.array([var.val or 0.0 for var in problem._vars.values()], dtype=np.float64)
+            for unit, problem in p1.items()
+        }
+    else:
+        warm_starts = np.array([var.val or 0.0 for var in p1._vars.values()], dtype=np.float64)
+
+    # --- Reset and apply Stage 1 schedule to forest model ---
+    fm.reset()
+    fm.apply_schedule(
+        schedules_stage1,
+        force_integral_area=True,
+        override_operability=True,
+        fuzzy_age=True,
+        recourse_enabled=True,
+        verbose=False,
+        compile_c_ycomps=True
+    )
+
+    ########################################
+    # Build harvest volume constraints for Stage 2
+    ########################################
+    vexpr = f"{tvy_name} * {util:0.2f}"
+    hv_coeffs = {bn: p_max_hv.get(bn, 1.0) for bn in basenames}
+    cgen_hv = {
+        (bn, t): fm.compile_product(
+            t, vexpr,
+            dtype_keys=fm.unmask((bn, '?', '?', '?'))
+        ) * hv_coeffs[bn]
+        for bn in basenames
+        for t in fm.periods
+    }
+
+    ########################################
+    # Stage 2: Minimize harvest area
+    ########################################
+    print('schedule_harvest_optimize: stage 2, generating problem')
+    p2 = gen_scen(
+        fm=fm,
+        basenames=basenames,
+        name=scenario_name,
+        util=util,
+        obj_mode='min_ha',
+        cgen_hv=cgen_hv,
+        mgmt_unit_theme=mgmt_unit_theme,
+        workers=workers
+    )
+
+    schedules_stage2 = _solve_stage(
+        fm, p2, "schedule_harvest_optimize: stage 2", workers,
+        warm_starts=warm_starts
+    )
+
+    # --- Reset and apply Stage 2 schedule ---
+    fm.reset()
+    fm.apply_schedule(
+        schedules_stage2,
+        force_integral_area=True,
+        override_operability=True,
+        fuzzy_age=True,
+        recourse_enabled=True,
+        verbose=False,
+        compile_c_ycomps=True
+    )
+
+    return schedules_stage2
 
 def schedule_harvest_areacontrol(fm, period=None, acode='harvest', util=0.85, 
                                  target_scalefactors=None,
@@ -471,7 +730,6 @@ def schedule_harvest_areacontrol(fm, period=None, acode='harvest', util=0.85,
     sch = fm.compile_schedule()
     return sch
 
-
 def sda(fm, basenames, time_step, tif_path, hdt, acode_map=None, nthresh=10, 
         sda_mode='randblk', horizon=1, verbose=False):
     from pathlib import Path
@@ -504,7 +762,6 @@ def sda(fm, basenames, time_step, tif_path, hdt, acode_map=None, nthresh=10,
         fr.allocate_schedule(mask=mask, verbose=verbose, sda_mode=sda_mode, nthresh=nthresh)
         fr.cleanup()
 
-
 def pickle_forestmodel(fm, scenario_name, basename):
     pickle.dump(fm, open('dat/out/%s_%s_fm.pkl' % (scenario_name, basename), 'wb'))
 
@@ -512,10 +769,9 @@ def pickle_forestmodel(fm, scenario_name, basename):
 def pickle_schedule(sch, scenario_name, basename):
     pickle.dump(sch, open('dat/out/%s_%s_sch.pkl' % (scenario_name, basename), 'wb'))
 
-
 def unpickle_forestmodel(scenario_name, basename):
     return pickle.load(open('dat/out/%s/%s_%s_fm.pkl' % (scenario_name, scenario_name, basename), 'rb'))
 
-
 def unpickle_schedule(scenario_name, basename):
+    return pickle.load(open('dat/out/%s/%s_%s_sch.pkl' % (scenario_name, scenario_name, basename), 'rb'))
     return pickle.load(open('dat/out/%s/%s_%s_sch.pkl' % (scenario_name, scenario_name, basename), 'rb'))
