@@ -77,22 +77,22 @@ doEvent.spades_ws3 = function(sim, eventTime, eventType) {
 ## event functions
 
 Init <- function(sim) {
-    browser()
-    # library(R.utils) # not necessary
-    # library(SpaDES.core) # force loading SpaDES.core if it isn't already, so py_run_file works
-    if (is.null(P(sim)$basenames)) stop(paste("'basenames' parameter value not specified in", currentModule(sim)))
-    cmp <- grep(pattern = paste0(currentModule(sim), "$"), x = list.files(modulePath(sim))) %>%
-           list.files(path = modulePath(sim), full.names = TRUE)[.] # current module path
-    #py$sys$path <- insert(py$sys$path, 1, file.path(cmp, "python"))
-    #py$sys$path <- insert(py$sys$path, 1, file.path(cmp, "python", "ws3"))
-    py$basenames <- P(sim)$basenames
-    py$enable_debugpy <- P(sim)$enable.debugpy
-    py_run_file(file.path(cmp, "python", "spadesws3_params.py"))
-    py$base_year <- P(sim)$base.year
-    py$horizon <- P(sim)$horizon
-    sim$fm <- py$bootstrap_forestmodel_kwargs()
-    py$fm <- sim$fm
-    return(invisible(sim))
+
+  # library(R.utils) # not necessary
+  # library(SpaDES.core) # force loading SpaDES.core if it isn't already, so py_run_file works
+  if (is.null(P(sim)$basenames)) stop(paste("'basenames' parameter value not specified in", currentModule(sim)))
+  cmp <- grep(pattern = paste0(currentModule(sim), "$"), x = list.files(modulePath(sim))) %>%
+    list.files(path = modulePath(sim), full.names = TRUE)[.] # current module path
+  #py$sys$path <- insert(py$sys$path, 1, file.path(cmp, "python"))
+  #py$sys$path <- insert(py$sys$path, 1, file.path(cmp, "python", "ws3"))
+  py$basenames <- P(sim)$basenames
+  py$enable_debugpy <- P(sim)$enable.debugpy
+  py_run_file(file.path(cmp, "python", "spadesws3_params.py"))
+  py$base_year <- P(sim)$base.year
+  py$horizon <- P(sim)$horizon
+  sim$fm <- py$bootstrap_forestmodel_kwargs()
+  py$fm <- sim$fm
+  return(invisible(sim))
 }
 
 
